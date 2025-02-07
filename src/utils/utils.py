@@ -1,4 +1,4 @@
-# src/utils/utils.py
+# # /data/agirard/Projects/TimeTravel-DifferentiableMetrics/src/utils/utils.py
 import time
 import json
 import logging
@@ -10,6 +10,7 @@ import uuid  # Add this import statement
 from src.utils.config import CONFIG
 
 logger = logging.getLogger(__name__)
+
 
 def count_json_lines(file_path):
     """
@@ -23,7 +24,8 @@ def count_json_lines(file_path):
     except FileNotFoundError:
         logger.error(f"File not found: {file_path}")
         raise FileNotFoundError(f"File not found: {file_path}")
-    
+
+
 def load_first_line_from_json(file_path):
     """
     Loads and parses the first line from a JSON file. This is useful for inspecting
@@ -37,23 +39,26 @@ def load_first_line_from_json(file_path):
         logger.error(f"Error reading from {file_path}: {e}")
         raise IOError(f"Error reading from {file_path}: {e}")
 
+
 def calculate_differential_weights(tokenized_labels, tokenizer, differences, high_weight=1, base_weight=1):
-        """
-        Calculate differential weights for tokenized labels (edited endings) based on diff
-        erences.
-        """
-        # Initialize differential weights with base_weight
-        differential_weights = torch.full(tokenized_labels.shape, fill_value=base_weight, dtype=torch.float)
-        
-        # Flatten the list of differences for easy checking
-        difference_tokens_ids = set([item for sublist in [tokenizer.encode(diff, add_special_tokens=False) for diff in differences] for item in sublist])
-        
-        # Adjust weights for tokens present in differences
-        for i, token_id in enumerate(tokenized_labels.squeeze().tolist()):
-            if token_id in difference_tokens_ids:
-                differential_weights[i] = high_weight
-        
-        return differential_weights    
+    """
+    Calculate differential weights for tokenized labels (edited endings) based on differences.
+    """
+    # Initialize differential weights with base_weight
+    differential_weights = torch.full(tokenized_labels.shape, fill_value=base_weight, dtype=torch.float)
+
+    # Flatten the list of differences for easy checking
+    difference_tokens_ids = set(
+        [item for sublist in [tokenizer.encode(diff, add_special_tokens=False) for diff in differences] for item in
+         sublist])
+
+    # Adjust weights for tokens present in differences
+    for i, token_id in enumerate(tokenized_labels.squeeze().tolist()):
+        if token_id in difference_tokens_ids:
+            differential_weights[i] = high_weight
+
+    return differential_weights
+
 
 def preprocess_data(row, tokenizer):
     """
@@ -96,40 +101,41 @@ def preprocess_data(row, tokenizer):
         else:
             raise ValueError(f"Unsupported dataset type: {dataset_type}")
 
-        
         # Tokenize the input sequence with truncation to max_length and no padding here.
         tokenized_inputs = tokenizer.encode_plus(
             input_sequence, truncation=True, return_tensors="pt", max_length=CONFIG["max_length"]
         )
-        #print(f"Tokenized Inputs: {tokenized_inputs}")  # Debug print for tokenized inputs
-              
+        # print(f"Tokenized Inputs: {tokenized_inputs}")  # Debug print for tokenized inputs
+
         # Tokenize the edited ending, which serves as the target sequence for the model to generate.
         tokenized_ending = tokenizer.encode_plus(
             row['edited_ending'], truncation=True, return_tensors="pt", max_length=CONFIG["max_length"]
         )
-        #print(f"Tokenized Ending: {tokenized_ending}") 
-                
+        # print(f"Tokenized Ending: {tokenized_ending}")
+
         # Calculate differential weights based on the list of differences provided for each token. This highlights tokens
         # that are directly associated with the differences, aiming to adjust the model's focus and learning priority.
         differential_weights = calculate_differential_weights(
             tokenized_ending['input_ids'].squeeze(), tokenizer, row['differences']
         )
-        #print(f"Differential Weights: {differential_weights}")
-        
+        # print(f"Differential Weights: {differential_weights}")
+
         # Ensure that 'differential_weights' matches the length of 'labels'
-        assert tokenized_ending['input_ids'].squeeze(0).size() == differential_weights.size(), "Mismatch between labels and differential weights length."
-        
-        #print(f"Input IDs: {tokenized_inputs['input_ids']}")
-        #print(f"Attention Mask: {tokenized_inputs['attention_mask']}")
-        #print(f"Labels: {tokenized_ending['input_ids']}")
-        #print(f"Differential Weights: {differential_weights}")
+        assert tokenized_ending['input_ids'].squeeze(
+            0).size() == differential_weights.size(), "Mismatch between labels and differential weights length."
+
+        # print(f"Input IDs: {tokenized_inputs['input_ids']}")
+        # print(f"Attention Mask: {tokenized_inputs['attention_mask']}")
+        # print(f"Labels: {tokenized_ending['input_ids']}")
+        # print(f"Differential Weights: {differential_weights}")
 
         # Prepare the final output dictionary
         return {
             'input_ids': tokenized_inputs['input_ids'].squeeze(0),
             'attention_mask': tokenized_inputs['attention_mask'].squeeze(0),
             'labels': tokenized_ending['input_ids'].squeeze(0),
-            'differential_weights': differential_weights.squeeze(0),  # Ensure the differential weights are correctly sized.
+            'differential_weights': differential_weights.squeeze(0),
+            # Ensure the differential weights are correctly sized.
             # Include non-tokenized data for metric calculations.
             'premise': row['premise'],
             'initial': row['initial'],
@@ -138,12 +144,13 @@ def preprocess_data(row, tokenizer):
             # Include original_ending only if available
             **({'original_ending': row['original_ending']} if 'original_ending' in row else {})
         }
-    
+
     except Exception as e:
         logger.error(f"Error in preprocess_data: {e}")
         return None
-    
-def collate_fn(batch, pad_token_id=0,attention_pad_value=0):
+
+
+def collate_fn(batch, pad_token_id=0, attention_pad_value=0):
     """
     Collates a batch of preprocessed data into a format suitable for model input,
     including padding to equalize the lengths of sequences within the batch.
@@ -164,22 +171,22 @@ def collate_fn(batch, pad_token_id=0,attention_pad_value=0):
     print(f"Extracted Fields:\nPremises: {premise}\nInitials: {initial}\nOriginal Endings: {original_ending}\n"
           f"Counterfactuals: {counterfactual}\nEdited Endings: {edited_ending}")  # Debug print for field values
 
-
     # Padding sequences for 'input_ids', 'attention_masks', and 'labels'
     input_ids_padded = torch.nn.utils.rnn.pad_sequence(input_ids, batch_first=True, padding_value=pad_token_id)
-    attention_masks_padded = torch.nn.utils.rnn.pad_sequence(attention_mask, batch_first=True, padding_value=attention_pad_value)
+    attention_masks_padded = torch.nn.utils.rnn.pad_sequence(attention_mask, batch_first=True,
+                                                             padding_value=attention_pad_value)
     labels_padded = torch.nn.utils.rnn.pad_sequence(labels, batch_first=True, padding_value=pad_token_id)
-   
+
     # Convert differential_weights to tensors and pad
     differential_weights_tensors = [dw.clone().detach().to(input_ids_padded.device) for dw in differential_weights]
-    differential_weights_padded = torch.nn.utils.rnn.pad_sequence(differential_weights_tensors, batch_first=True, padding_value=1)
+    differential_weights_padded = torch.nn.utils.rnn.pad_sequence(differential_weights_tensors, batch_first=True,
+                                                                  padding_value=1)
 
     # Debug prints
-    #print(f"input_ids_padded shape: {input_ids_padded.shape}")
-    #print(f"attention_masks_padded shape: {attention_masks_padded.shape}")
-    #print(f"labels_padded shape: {labels_padded.shape}")
-    #print(f"differential_weights_padded shape: {differential_weights_padded.shape}")
-
+    # print(f"input_ids_padded shape: {input_ids_padded.shape}")
+    # print(f"attention_masks_padded shape: {attention_masks_padded.shape}")
+    # print(f"labels_padded shape: {labels_padded.shape}")
+    # print(f"differential_weights_padded shape: {differential_weights_padded.shape}")
 
     # Return the padded tensors along with the additional fields for evaluation.
     return {
@@ -193,6 +200,7 @@ def collate_fn(batch, pad_token_id=0,attention_pad_value=0):
         'counterfactual': counterfactual,
         'edited_ending': edited_ending,
     }
+
 
 def chatgpt_zero_shot_inference(api_key, test_data):
     """
@@ -237,12 +245,12 @@ def chatgpt_zero_shot_inference(api_key, test_data):
                 generated_text = response['choices'][0]['message']['content'].strip()
                 break  # Exit the retry loop on success
             except Exception as e:
-                #print(f"API call failed for row {idx} with error: {e}")
+                # print(f"API call failed for row {idx} with error: {e}")
                 if attempt < max_retries - 1:
-                    #print(f"Retrying in {retry_delay} seconds...")
+                    # print(f"Retrying in {retry_delay} seconds...")
                     time.sleep(retry_delay)
                 else:
-                    #print("Max retries reached. Moving to the next item.")
+                    # print("Max retries reached. Moving to the next item.")
                     generated_text = 'Error'  # Or any placeholder indicating a failure
 
         results.append({
@@ -257,81 +265,6 @@ def chatgpt_zero_shot_inference(api_key, test_data):
 
     return results
 
-def chatgpt_one_shot_inference(api_key, test_data, example_selection):
-    """
-    Perform one-shot inference using the OpenAI GPT model.
-
-    Parameters:
-        api_key (str): OpenAI API key.
-        test_data (DataFrame): DataFrame containing the test data.
-        example_selection (str): If "fixed", use a fixed example. If "random", select a random example for each query.
-
-    Returns:
-        results (list): List of dictionaries containing the results.
-    """
-    openai.api_key = api_key
-    results = []
-
-    # Prepare the fixed example (using the first row for simplicity)
-    fixed_example = test_data.iloc[0] if example_selection == "fixed" else None
-
-    for idx, row in test_data.iterrows():
-        # Select a random example if required
-        if example_selection == "random":
-            example = test_data.sample(n=1).iloc[0]
-        else:
-            example = fixed_example
-
-        prompt = (
-            "Generate the adapted ending to fill these three aspects:\n"
-            "1. Minimal Intervention: Adjust the story's original ending with the minimal changes required to align it with the counterfactual event. The edited ending should remain as close as possible to the original ending.\n"
-            "2. Narrative Insight: Understand the story structure and make changes essential for maintaining the story's coherence and thematic consistency, avoiding unnecessary alterations.\n"
-            "3. Counterfactual Adaptability: Adapt the story's course in response to the counterfactual event that diverges from the initial event.\n\n"
-            "Example:\n"
-            f"Premise: {example['premise']}\n"
-            f"Initial event: {example['initial']}\n"
-            f"Original ending: {example['original_ending']}\n"
-            f"Counterfactual event: {example['counterfactual']}\n"
-            f"Adapted ending: {example['edited_ending']}\n\n"
-            f"Premise: {row['premise']}\n"
-            f"Initial event: {row['initial']}\n"
-            f"Original ending: {row['original_ending']}\n"
-            f"Counterfactual event: {row['counterfactual']}\n\n"
-            "Now, generate the adapted ending:"
-        )
-
-        #print(f"Prompt for row {idx}: {prompt}")
-
-        try:
-            response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo-0125",
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=50  # Use max_gen_length from the config if necessary
-            )
-            generated_text = response['choices'][0]['message']['content'].strip()
-
-            # Remove "Adapted ending:" prefix if present
-            if generated_text.lower().startswith("adapted ending:"):
-                generated_text = generated_text[len("adapted ending:"):].strip()
-
-            #print(f"Generated text for row {idx}: {generated_text}")
-
-            results.append({
-                'story_id': row['story_id'],
-                'premise': row['premise'],
-                'initial': row['initial'],
-                'counterfactual': row['counterfactual'],
-                'original_ending': row['original_ending'],
-                'edited_ending': row['edited_ending'],
-                'generated_text': generated_text  # Change key to "generated_text"
-            })
-        except Exception as e:
-            print(f"API call failed for row {idx} with error: {e}")
-
-    return results
 
 def chatgpt_one_shot_inference(api_key, test_data, example_selection):
     """
