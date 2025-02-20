@@ -1,0 +1,11 @@
+file_label: _dto
+model_dir: !!python/object/apply:pathlib.PosixPath
+- /
+- data
+- agirard
+- Projects
+- TimeTravel-DifferentiableMetrics
+- models
+- dto_2025-02-19-12
+model_name: facebook/bart-large-cnn
+use_differentiable_training: true

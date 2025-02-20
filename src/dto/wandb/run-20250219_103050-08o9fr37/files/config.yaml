@@ -1,0 +1,98 @@
+_wandb:
+    value:
+        cli_version: 0.19.6
+        m:
+            - "1": trainer/global_step
+              "6":
+                - 3
+              "7": []
+        python_version: 3.11.11
+        t:
+            "1":
+                - 1
+                - 9
+                - 11
+                - 49
+                - 55
+                - 95
+                - 103
+            "2":
+                - 1
+                - 9
+                - 11
+                - 49
+                - 55
+                - 95
+                - 103
+            "3":
+                - 7
+                - 23
+                - 55
+                - 66
+            "4": 3.11.11
+            "5": 0.19.6
+            "6": 4.48.2
+            "8":
+                - 5
+            "12": 0.19.6
+            "13": linux-x86_64
+bart_scorer_checkpoint:
+    value: facebook/bart-large-cnn
+batch_size:
+    value: 1
+data_dir:
+    value: /data/agirard/Projects/TimeTravel-DifferentiableMetrics/data/transformed
+dataset_type:
+    value: TimeTravel
+dev_file:
+    value: dev_data_sample.json
+dto_checkpoint_path:
+    value: null
+dto_enabled:
+    value: true
+dto_epochs:
+    value: 3
+file_label:
+    value: _dto
+learning_rate:
+    value: 2e-05
+log_code:
+    value: false
+log_system_stats:
+    value: false
+logs_dir:
+    value: /data/agirard/Projects/TimeTravel-DifferentiableMetrics/logs
+max_gen_length:
+    value: 250
+max_length:
+    value: 512
+model_dir:
+    value: /data/agirard/Projects/TimeTravel-DifferentiableMetrics/models/dto_2025-02-19-10
+model_name:
+    value: facebook/bart-large-cnn
+models_dir:
+    value: /data/agirard/Projects/TimeTravel-DifferentiableMetrics/models
+num_workers:
+    value: 3
+output_attentions:
+    value: true
+results_dir:
+    value: /data/agirard/Projects/TimeTravel-DifferentiableMetrics/results
+reward_metric:
+    value: bart
+root_dir:
+    value: /data/agirard/Projects/TimeTravel-DifferentiableMetrics
+shuffle:
+    value: true
+test_file:
+    value: test_data_sample.json
+train_file:
+    value: train_supervised_small_sample.json
+use_bart:
+    value: true
+use_custom_loss:
+    value: false
+use_differentiable_metrics:
+    value: true
+use_differentiable_training:
+    value: false

@@ -21,8 +21,8 @@ CONFIG = {
     "test_file": "test_data_sample.json",
 
     # Model and training configurations
-    "model_name": os.getenv('MODEL_NAME', "facebook/bart-large"),  # Use BART model instead of T5
-    "batch_size": int(os.getenv('BATCH_SIZE', 4)),  # Number of samples per batch
+    "model_name": os.getenv('MODEL_NAME', "facebook/bart-large-cnn"),  # Use BART model instead of T5
+    "batch_size": int(os.getenv('BATCH_SIZE', 1)),  # Number of samples per batch
     "num_workers": int(os.getenv('NUM_WORKERS', 3)),  # Number of workers for data loading
     "learning_rate": float(os.getenv('LEARNING_RATE', 2e-5)),  # Learning rate for the optimizer
 
@@ -43,7 +43,8 @@ CONFIG = {
 
     # **DTO Training Configuration**
     "use_differentiable_metrics": True,  # Ensure DTO mode is enabled
-    "dto_checkpoint_path": "/data/agirard/Projects/TimeTravel-DifferentiableMetrics/models/mle_2025-02-11-11/mle_checkpoint_epoch-epoch=02-step-step=000003-val_loss=validation_mle_loss=3.82.ckpt",  # Train DTO from scratch
+    "dto_checkpoint_path": None,
+    #"dto_checkpoint_path": "/data/agirard/Projects/TimeTravel-DifferentiableMetrics/models/mle_2025-02-11-11/mle_checkpoint_epoch-epoch=02-step-step=000003-val_loss=validation_mle_loss=3.82.ckpt",  # Train DTO from scratch
     "dto_epochs": 3,  # Number of epochs for DTO training
 
     # **Metric Configuration (Only BART is used)**
@@ -53,7 +54,7 @@ CONFIG = {
 
     # Additional training options
     "use_custom_loss": False,  # Whether to use a custom loss function (set to False for MLE)
-    "output_attentions": False,  # Set to True to output attentions from the model (optional)
+    "output_attentions": True,  # Set to True to output attentions from the model (optional)
 
 }
 

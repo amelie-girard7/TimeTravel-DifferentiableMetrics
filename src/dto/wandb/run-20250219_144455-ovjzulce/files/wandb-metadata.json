@@ -1,0 +1,48 @@
+{
+  "os":  "Linux-4.18.0-477.27.1.el8_8.x86_64-x86_64-with-glibc2.28",
+  "python":  "CPython 3.11.11",
+  "startedAt":  "2025-02-19T03:44:55.999441Z",
+  "program":  "/data/agirard/Projects/TimeTravel-DifferentiableMetrics/src/dto/main_dto.py",
+  "codePath":  "src/dto/main_dto.py",
+  "git":  {
+    "remote":  "https://github.com/amelie-girard7/TimeTravel-DifferentiableMetrics.git",
+    "commit":  "e28c90cd9dbba844ad9aee53355135515e8cad80"
+  },
+  "email":  "amelie.girard@student.uts.edu.au",
+  "root":  ".",
+  "host":  "neptune12.ihpc.uts.edu.au",
+  "executable":  "/data/agirard/anaconda3/envs/dif-env/bin/python",
+  "codePathLocal":  "main_dto.py",
+  "cpu_count":  32,
+  "cpu_count_logical":  32,
+  "gpu":  "NVIDIA A40",
+  "gpu_count":  2,
+  "disk":  {
+    "/":  {
+      "total":  "1166903869440",
+      "used":  "931818029056"
+    }
+  },
+  "memory":  {
+    "total":  "269886050304"
+  },
+  "cpu":  {
+    "count":  32,
+    "countLogical":  32
+  },
+  "gpu_nvidia":  [
+    {
+      "name":  "NVIDIA A40",
+      "memoryTotal":  "48305799168",
+      "cudaCores":  10752,
+      "architecture":  "Ampere"
+    },
+    {
+      "name":  "NVIDIA A40",
+      "memoryTotal":  "48305799168",
+      "cudaCores":  10752,
+      "architecture":  "Ampere"
+    }
+  ],
+  "cudaVersion":  "12.4"
+}

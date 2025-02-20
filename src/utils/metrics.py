@@ -102,3 +102,26 @@ class MetricsEvaluator:
                     print(f"Error calculating {label}: {e}")
 
         return bart_scores
+
+    def calculate_score_embeds(self, inputs_embeds, references):
+        """
+        Computes BARTScore similarity by passing expected embeddings directly as inputs.
+
+        Args:
+            inputs_embeds (torch.Tensor): Expected embeddings from the rewriting model.
+            references (list of str): Reference texts (edited endings) tokenized as usual.
+
+        Returns:
+            scores_tensor (torch.Tensor): A tensor of BARTScore values.
+        """
+        # Use the CONFIG file to determine the batch size.
+        batch_size = CONFIG.get("batch_size", 4)
+
+        # Call the new score_embeds method from the BART scorer.
+        scores = self.bart_scorer.score_embeds(inputs_embeds, references, batch_size=batch_size)
+
+        # Convert scores to a tensor on the device specified in the config.
+        scorer_device = CONFIG.get("scorer_device", "cuda" if torch.cuda.is_available() else "cpu")
+        scores_tensor = torch.tensor(scores, dtype=torch.float32, device=scorer_device)
+
+        return scores_tensor
