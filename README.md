@@ -1,7 +1,3 @@
-Below is an enhanced version of the README that merges the original description with the updated feedback:
-
----
-
 # Differentiable Training Objectives (DTO) for Counterfactual Story Rewriting with BART and BARTScore
 
 ## 1. Introduction
@@ -156,13 +152,3 @@ def score_embeds(self, inputs_embeds, tgts, batch_size=4):
    \]
 
 ---
-
-## 6. Conclusion
-
-This enhanced DTO approach enables end-to-end training of counterfactual rewriting models in the continuous embedding space by:
-- Using a **trainable rewriting model** to produce soft output embeddings.
-- Employing a **frozen scorer model** (with the same vocabulary) to compute expected embeddings and obtain reference embeddings.
-- Introducing a new `score_embeds` method that supports passing expected embeddings directly via `inputs_embeds`, while keeping the reference sentence tokenized as labels.
-- Ensuring that gradients flow only through the rewriting model, keeping the scorer’s parameters intact.
-
-By integrating these modifications and re-compiling the local BARTScorer package, you will be able to enforce semantic similarity in the rewriting process through a fully differentiable objective.
