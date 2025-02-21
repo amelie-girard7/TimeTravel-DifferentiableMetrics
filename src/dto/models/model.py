@@ -38,7 +38,7 @@ class FlanT5FineTuner(pl.LightningModule):
         self.metrics_evaluator = MetricsEvaluator()
 
         # TODO: Temporary variable for debugging (delete after checking successfull)
-        self.bart_scorer_og_embed = self.metrics_evaluator.bart_scorer.model.get_input_embeddings().weight.deepcopy()
+        self.bart_scorer_og_embed = self.metrics_evaluator.bart_scorer.model.get_input_embeddings().weight.clone()
 
         logger.info("Initializing DTO mode...")
         # Load BART-based scoring model
@@ -70,14 +70,16 @@ class FlanT5FineTuner(pl.LightningModule):
             return_dict=True
         )
         logits = outputs.logits  # [batch, seq_len, vocab_size]
+        device = logits.device  # Ensure we use the same device for all tensors
         probs = torch.softmax(logits, dim=-1)
-        embedding_matrix = self.metrics_evaluator.bart_scorer.model.get_input_embeddings().weight
+
+        # Get the embedding matrix and explicitly move it to the logits' device
+        embedding_matrix = self.metrics_evaluator.bart_scorer.model.get_input_embeddings().weight.to(device)
+
         # TODO: Temporary prints statement for debugging if paramters are frozen (delete after checking successfull)
-        print(">> BART Scorer embeddings requires grad: ",
-              embedding_matrix.requires_grad)
+        print(">> BART Scorer embeddings requires grad: ", embedding_matrix.requires_grad)
         # Another print statement to check if embeddings are the same as the original model before training starts
-        print(">> BART Scorer embeddings are the same as the original model: ",
-              torch.equal(embedding_matrix, self.bart_scorer_og_embed))
+        print(">> BART Scorer embeddings are the same as the original model: ", torch.equal(embedding_matrix, self.bart_scorer_og_embed.to(device)))
 
         expected_embeddings = torch.matmul(probs, embedding_matrix)
         print(">> Computed expected embeddings in DTO mode")
@@ -86,7 +88,7 @@ class FlanT5FineTuner(pl.LightningModule):
     def dto_loss_embeds(self, expected_embeddings, edited_endings):
         print(">> Computing DTO loss from expected embeddings")
         # TODO: Check if the BART scorer is in eval mode (delete after checking successfull)
-        for param in slef.metrics_evaluator.bart_scorer.model.parameters():
+        for param in self.metrics_evaluator.bart_scorer.model.parameters():
             if param.requires_grad:
                 raise ValueError("BART Scorer model is not in eval mode")
 
@@ -114,14 +116,35 @@ class FlanT5FineTuner(pl.LightningModule):
         #
         # edited_endings = [str(ee) for ee in batch['edited_ending']]
         # dto_val_loss = self.dto_loss_embeds(expected_embeddings, edited_endings)
-        generated_texts = self.tokenizer.batch_decode(
-            expected_embeddings.argmax(dim=-1), skip_special_tokens=True
+        # Unpack input tensors
+        # Generate token IDs using the model's generate() method
+
+
+
+        # --- Differentiable Loss Computation ---
+        # Run forward pass to get soft outputs (expected embeddings)
+        expected_embeddings = self.forward(input_ids=input_ids, attention_mask=attention_mask, labels=None)
+        print(expected_embeddings.size())
+        edited_endings = [str(ee) for ee in batch['edited_ending']]
+        dto_val_loss = self.dto_loss_embeds(expected_embeddings, edited_endings)
+
+        # --- Non-differentiable Evaluation (for logging purposes) ---
+        # Use generate() to produce token IDs (non-differentiable) for evaluation
+        generated_tokens = self.model.generate(
+            input_ids=input_ids,
+            attention_mask=attention_mask
         )
-        
-        # Retrieve additional reference texts for BARTScore comparisons.
+        #print("Generated tokens size:", generated_tokens.size())
+
+        # Decode the generated tokens to obtain text
+        generated_texts = self.tokenizer.batch_decode(
+            generated_tokens, skip_special_tokens=True
+        )
+         # Convert ground-truth fields to strings
+        #edited_endings = [str(ee) for ee in batch['edited_ending']]
+        original_endings = [str(oe) for oe in batch['original_ending']]
         counterfactuals = [str(cf) for cf in batch['counterfactual']]
         initials = [str(init) for init in batch['initial']]
-        original_endings = [str(oe) for oe in batch['original_ending']]
 
         bart_scores = self.metrics_evaluator.calculate_and_log_bart_similarity(
             generated_texts, edited_endings, counterfactuals, initials, [], original_endings, logger
@@ -154,23 +177,34 @@ class FlanT5FineTuner(pl.LightningModule):
         # edited_endings = [str(ee) for ee in batch['edited_ending']]
         # dto_test_loss = self.dto_loss_embeds(expected_embeddings, edited_endings)
 
+        # Generate token IDs using the model's generate() method
+        generated_tokens = self.model.generate(
+            input_ids=input_ids,
+            attention_mask=attention_mask
+        )
+        print("Generated tokens size:", generated_tokens.size())
+
+        # Decode the generated tokens to obtain text
         generated_texts = self.tokenizer.batch_decode(
-            expected_embeddings.argmax(dim=-1), skip_special_tokens=True
+            generated_tokens, skip_special_tokens=True
         )
 
-        # Retrieve additional reference texts for computing BARTScore similarities.
+         # Convert ground-truth fields to strings
+        edited_endings = [str(ee) for ee in batch['edited_ending']]
+        original_endings = [str(oe) for oe in batch['original_ending']]
         counterfactuals = [str(cf) for cf in batch['counterfactual']]
         initials = [str(init) for init in batch['initial']]
-        original_endings = [str(oe) for oe in batch['original_ending']]
 
+        # Calculate evaluation metrics using BART similarity
         bart_scores = self.metrics_evaluator.calculate_and_log_bart_similarity(
             generated_texts, edited_endings, counterfactuals, initials, [], original_endings, logger
         )
 
+        # Log each evaluation metric
         for metric_name, score in bart_scores.items():
             self.log(metric_name, score, on_epoch=True, prog_bar=True, logger=True)
 
-        self.log('test_dto_loss', dto_test_loss, on_epoch=True, prog_bar=True, logger=True)
+        # self.log('test_dto_loss', dto_test_loss, on_epoch=True, prog_bar=True, logger=True)
         
         for i in range(len(generated_texts)):
             test_entry = {
@@ -184,7 +218,9 @@ class FlanT5FineTuner(pl.LightningModule):
             }
             test_entry.update(bart_scores)
             self.epoch_test_details.append(test_entry)
-        return dto_test_loss
+
+        # Return None since loss is not tracked in the test phase
+        return None
 
     def on_validation_epoch_end(self):
         """

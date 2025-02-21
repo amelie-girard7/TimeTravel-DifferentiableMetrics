@@ -32,12 +32,11 @@ CONFIG = {
     "shuffle": True,        # Shuffle dataset during training
 
     # **Experiment Mode (DTO Training)**
-    "experiment_mode": "mle_checkpoint",  # Options: "scratch" | "mle_checkpoint"
+    "experiment_mode": "scratch",  # Options: "scratch" | "mle_checkpoint"
     "dto_epochs": 1,  # Number of DTO training epochs
 
     # **MLE Checkpoint for DTO Training**
-    "dto_checkpoint_path": ROOT_DIR / "models" / "mle_2025-02-19-13" / 
-        "mle_checkpoint_epoch-epoch=01-step-step=000003-val_loss=validation_mle_loss=2.39.ckpt",
+    "dto_checkpoint_path":None,
 
     # **DTO Training Settings**
     "dto_enabled": True,                 # Enable DTO mode

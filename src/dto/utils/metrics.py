@@ -22,6 +22,11 @@ class MetricsEvaluator:
             device=CONFIG.get("scorer_device", "cuda" if torch.cuda.is_available() else "cpu"),
             checkpoint=CONFIG.get("bart_scorer_checkpoint", "facebook/bart-large-cnn")
         )
+        # Set the underlying model to eval mode and freeze its parameters
+        self.bart_scorer.model.eval()
+        # Freeze BART scorer so it does not update during training
+        for param in self.bart_scorer.model.parameters():
+            param.requires_grad = False
 
         print("MetricsEvaluator initialized.")
 
