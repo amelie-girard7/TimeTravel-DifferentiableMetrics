@@ -15,7 +15,7 @@ class MetricsEvaluator:
         """
         Initializes the metric evaluator with BARTScore.
         """
-        print(f"Initializing MetricsEvaluator with config: {CONFIG}")
+        #print(f"Initializing MetricsEvaluator with config: {CONFIG}")
 
         # Initialize BARTScorer (used for DTO loss and evaluation)
         self.bart_scorer = BARTScorer(
@@ -23,7 +23,7 @@ class MetricsEvaluator:
             checkpoint=CONFIG.get("bart_scorer_checkpoint", "facebook/bart-large-cnn")
         )
 
-        print("MetricsEvaluator initialized.")
+        #print("MetricsEvaluator initialized.")
 
     def calculate_score(self, generated_texts, references):
         """
@@ -39,7 +39,7 @@ class MetricsEvaluator:
         if self.bart_scorer is None:
             raise ValueError("BARTScore is not initialized. Set 'use_bart' to True in CONFIG.")
 
-        print("Calculating BARTScore...")
+        #print("Calculating BARTScore...")
         # Ensure inputs are lists of strings
         generated_texts = [str(gt) for gt in generated_texts]
         references = [str(ref) for ref in references]
@@ -49,7 +49,7 @@ class MetricsEvaluator:
         # Convert scores to a tensor for logging
         scores_tensor = torch.tensor(scores, dtype=torch.float32, device=CONFIG.get("scorer_device", "cpu"))
 
-        print(f"BARTScore Tensor: {scores_tensor}")
+        #print(f"BARTScore Tensor: {scores_tensor}")
         return scores_tensor
 
     def calculate_and_log_bart_similarity(self, all_generated_texts, all_edited_endings,
@@ -70,7 +70,7 @@ class MetricsEvaluator:
         Returns:
             bart_scores (dict): Dictionary of computed BART similarity scores.
         """
-        print("Calculating BART similarity scores...")
+        #print("Calculating BART similarity scores...")
 
         # Define different text comparisons for evaluation
         all_comparisons = [
@@ -95,11 +95,11 @@ class MetricsEvaluator:
                     # Log the score
                     logger.info(f"{label}_avg_score: {avg_score}")
                     bart_scores[f"{label}_avg_score"] = avg_score
-                    print(f"{label}_avg_score: {avg_score}")
+                    #print(f"{label}_avg_score: {avg_score}")
                 except Exception as e:
                     logger.error(f"Error calculating {label}: {e}")
                     bart_scores[f"{label}_avg_score"] = 'N/A'
-                    print(f"Error calculating {label}: {e}")
+                    #print(f"Error calculating {label}: {e}")
 
         return bart_scores
 

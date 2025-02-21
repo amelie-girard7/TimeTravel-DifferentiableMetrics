@@ -83,8 +83,8 @@ def preprocess_data(row, tokenizer):
                 f"{row['premise']} {row['counterfactual']}"
             )
             target_sequence = row['edited_ending']
-            print(f"Input Sequence (ART/AblatdTimeTravel):{input_sequence}")
-            print(f"Target Sequence: {target_sequence}")
+            #print(f"Input Sequence (ART/AblatdTimeTravel):{input_sequence}")
+            #print(f"Target Sequence: {target_sequence}")
 
         elif dataset_type == "TimeTravel":
             # TimeTravel Dataset: Input = premise + initial + original_ending + counterfactual; Output = edited_ending
@@ -95,8 +95,8 @@ def preprocess_data(row, tokenizer):
                 f"{row['premise']} {row['counterfactual']}"
             )
             target_sequence = row['edited_ending']
-            print(f"Input Sequence (Timetravel sequence):{input_sequence}")
-            print(f"Target Sequence: {target_sequence}")
+            #print(f"Input Sequence (Timetravel sequence):{input_sequence}")
+            #print(f"Target Sequence: {target_sequence}")
 
         else:
             raise ValueError(f"Unsupported dataset type: {dataset_type}")
@@ -155,7 +155,7 @@ def collate_fn(batch, pad_token_id=0, attention_pad_value=0):
     Collates a batch of preprocessed data into a format suitable for model input,
     including padding to equalize the lengths of sequences within the batch.
     """
-    print(f"Batch before collation: {batch}")  # Debug print to show the raw batch data
+    #print(f"Batch before collation: {batch}")  # Debug print to show the raw batch data
     # Unpack the batch into separate lists for each field.
     # Extract fields explicitly to prevent ordering issues
     input_ids = [item['input_ids'] for item in batch]
@@ -168,8 +168,8 @@ def collate_fn(batch, pad_token_id=0, attention_pad_value=0):
     counterfactual = [item['counterfactual'] for item in batch]
     edited_ending = [item['edited_ending'] for item in batch]
 
-    print(f"Extracted Fields:\nPremises: {premise}\nInitials: {initial}\nOriginal Endings: {original_ending}\n"
-          f"Counterfactuals: {counterfactual}\nEdited Endings: {edited_ending}")  # Debug print for field values
+    #print(f"Extracted Fields:\nPremises: {premise}\nInitials: {initial}\nOriginal Endings: {original_ending}\n"
+    #      f"Counterfactuals: {counterfactual}\nEdited Endings: {edited_ending}")  # Debug print for field values
 
     # Padding sequences for 'input_ids', 'attention_masks', and 'labels'
     input_ids_padded = torch.nn.utils.rnn.pad_sequence(input_ids, batch_first=True, padding_value=pad_token_id)
