@@ -1,0 +1,2 @@
+bart_edited_ending_cf_avg_score,bart_edited_ending_initial_avg_score,bart_edited_ending_original_avg_score,bart_prediction_cf_avg_score,bart_prediction_edited_avg_score,bart_prediction_initial_avg_score,bart_prediction_original_avg_score,epoch,step,validation_dto_loss
+-3.2895586490631104,-3.7549662590026855,-1.693732500076294,-1.295486330986023,-1.8931630849838257,-1.815164566040039,-0.8771265745162964,0,0,2.028930425643921
