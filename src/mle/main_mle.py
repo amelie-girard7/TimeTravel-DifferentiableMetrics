@@ -28,7 +28,7 @@ def setup_model(model_dir, file_label="", checkpoint_path=None):
     If a checkpoint path is provided, the function loads the model from the checkpoint.
     """
     if checkpoint_path:
-        logger.info(f"Loading model from checkpoint: {checkpoint_path}")
+        #logger.info(f"Loading model from checkpoint: {checkpoint_path}")
         model = FlanT5FineTuner.load_from_checkpoint(
             checkpoint_path,
             model_name=CONFIG["model_name"],
@@ -36,7 +36,7 @@ def setup_model(model_dir, file_label="", checkpoint_path=None):
             file_label=file_label
         )
     else:
-        logger.info(f"Initializing a fresh model: {CONFIG['model_name']} with label {file_label}")
+        #logger.info(f"Initializing a fresh model: {CONFIG['model_name']} with label {file_label}")
         model = FlanT5FineTuner(
             model_name=CONFIG["model_name"],
             model_dir=model_dir,
@@ -58,15 +58,15 @@ def setup_trainer(max_epochs, checkpoint_callback, wandb_logger):
         val_check_interval=0.1,
         default_root_dir="./"
     )
-    logger.info(f"Trainer setup complete for {max_epochs} epochs.")
+    #logger.info(f"Trainer setup complete for {max_epochs} epochs.")
     return trainer
 
 def evaluate_and_save(model_dir, loader, best_checkpoint, file_label, best_epoch, phase):
     """
     Evaluates the model using BARTScore metrics and saves the computed metrics.
     """
-    logger.info(f"Evaluating {phase} data for best epoch {best_epoch} using checkpoint: {best_checkpoint}")
-    print(f"Evaluating {phase} data for best epoch {best_epoch} using checkpoint: {best_checkpoint}")
+    #logger.info(f"Evaluating {phase} data for best epoch {best_epoch} using checkpoint: {best_checkpoint}")
+    #print(f"Evaluating {phase} data for best epoch {best_epoch} using checkpoint: {best_checkpoint}")
 
     # Load model from checkpoint
     model = setup_model(model_dir, file_label=file_label, checkpoint_path=best_checkpoint)
@@ -121,8 +121,8 @@ def evaluate_and_save(model_dir, loader, best_checkpoint, file_label, best_epoch
     metrics_df.columns = ['Metric', 'Score']
     metrics_df.to_csv(metrics_file, index=False)
 
-    logger.info(f"{phase.capitalize()} evaluation metrics saved to {metrics_file}")
-    print(f"{phase.capitalize()} evaluation metrics saved to {metrics_file}")
+    #logger.info(f"{phase.capitalize()} evaluation metrics saved to {metrics_file}")
+    #print(f"{phase.capitalize()} evaluation metrics saved to {metrics_file}")
 
 def extract_epoch_from_checkpoint(checkpoint_path):
     """
@@ -166,7 +166,7 @@ def main():
         CONFIG["test_file"].split('.')[0]
     )
 
-    print("Starting MLE phase training...")
+    #print("Starting MLE phase training...")
     mle_checkpoint = CONFIG["mle_checkpoint_path"] if CONFIG["mle_from_checkpoint"] else None
 
     model = setup_model(model_dir, file_label="_mle", checkpoint_path=mle_checkpoint)
@@ -181,7 +181,7 @@ def main():
 
     trainer = setup_trainer(CONFIG["mle_epochs"], mle_checkpoint_callback, wandb_logger)
     trainer.fit(model, dataloaders[train_key], dataloaders[dev_key])
-    print("MLE training completed.")
+    #print("MLE training completed.")
 
     best_checkpoint = mle_checkpoint_callback.best_model_path
     if best_checkpoint:
@@ -191,7 +191,7 @@ def main():
         evaluate_and_save(model_dir, dataloaders[dev_key], best_checkpoint, "_mle", best_epoch, "validation")
 
 if __name__ == '__main__':
-    logger.info("Starting the main process...")
+    #logger.info("Starting the main process...")
     main()
     logger.info("Process completed.")
-    print("Process completed.")
+    #print("Process completed.")

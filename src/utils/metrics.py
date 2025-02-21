@@ -23,6 +23,12 @@ class MetricsEvaluator:
             checkpoint=CONFIG.get("bart_scorer_checkpoint", "facebook/bart-large-cnn")
         )
 
+        # TODO: You could add this code here, but I think it is redundant. (Already happening inside BARTScorer)
+        # self.bart_scorer.model.eval()
+        # # Freeze BART scorer so it does not update during training
+        # for param in self.bart_scorer.model.parameters():
+        #     param.requires_grad = False
+
         print("MetricsEvaluator initialized.")
 
     def calculate_score(self, generated_texts, references):

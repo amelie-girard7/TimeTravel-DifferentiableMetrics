@@ -21,7 +21,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Ensure safe loading of checkpoints in PyTorch 2.6+
+# Ensure safe loading of checkpoints in PyTorch 2.6+ - I don't think we need this line
 torch.serialization.add_safe_globals([os.path, re, datetime])
 
 def evaluate_and_save(model_dir, loader, best_checkpoint, file_label, best_epoch, phase):

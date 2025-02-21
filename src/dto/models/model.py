@@ -37,14 +37,17 @@ class FlanT5FineTuner(pl.LightningModule):
         self.epoch_test_scores = []
         self.metrics_evaluator = MetricsEvaluator()
 
+        # TODO: Temporary variable for debugging (delete after checking successfull)
+        self.bart_scorer_og_embed = self.metrics_evaluator.bart_scorer.model.get_input_embeddings().weight.deepcopy()
+
         logger.info("Initializing DTO mode...")
         # Load BART-based scoring model
-        self.bart_scorer = BartForConditionalGeneration.from_pretrained(CONFIG["bart_scorer_checkpoint"])
-        self.bart_scorer_tokenizer = BartTokenizer.from_pretrained(CONFIG["bart_scorer_checkpoint"])
-        self.bart_scorer.eval()
-        # Freeze BART scorer so it does not update during training
-        for param in self.bart_scorer.parameters():
-            param.requires_grad = False
+        # self.bart_scorer = BartForConditionalGeneration.from_pretrained(CONFIG["bart_scorer_checkpoint"])
+        # self.bart_scorer_tokenizer = BartTokenizer.from_pretrained(CONFIG["bart_scorer_checkpoint"])
+        # self.bart_scorer.eval()
+        # # Freeze BART scorer so it does not update during training
+        # for param in self.bart_scorer.parameters():
+        #     param.requires_grad = False
 
         logger.info(f"Model initialized: {model_name}")
 
@@ -53,7 +56,7 @@ class FlanT5FineTuner(pl.LightningModule):
         Override the train method to ensure `bart_scorer` remains in evaluation mode.
         """
         super().train(mode)
-        self.bart_scorer.eval()
+        self.metrics_evaluator.bart_scorer.model.eval()
         print(">> Setting BART scorer to eval()")
         return self
 
@@ -68,13 +71,25 @@ class FlanT5FineTuner(pl.LightningModule):
         )
         logits = outputs.logits  # [batch, seq_len, vocab_size]
         probs = torch.softmax(logits, dim=-1)
-        embedding_matrix = self.bart_scorer.get_input_embeddings().weight
+        embedding_matrix = self.metrics_evaluator.bart_scorer.model.get_input_embeddings().weight
+        # TODO: Temporary prints statement for debugging if paramters are frozen (delete after checking successfull)
+        print(">> BART Scorer embeddings requires grad: ",
+              embedding_matrix.requires_grad)
+        # Another print statement to check if embeddings are the same as the original model before training starts
+        print(">> BART Scorer embeddings are the same as the original model: ",
+              torch.equal(embedding_matrix, self.bart_scorer_og_embed))
+
         expected_embeddings = torch.matmul(probs, embedding_matrix)
         print(">> Computed expected embeddings in DTO mode")
         return expected_embeddings
 
     def dto_loss_embeds(self, expected_embeddings, edited_endings):
         print(">> Computing DTO loss from expected embeddings")
+        # TODO: Check if the BART scorer is in eval mode (delete after checking successfull)
+        for param in slef.metrics_evaluator.bart_scorer.model.parameters():
+            if param.requires_grad:
+                raise ValueError("BART Scorer model is not in eval mode")
+
         score_tensor = self.metrics_evaluator.calculate_score_embeds(expected_embeddings, edited_endings)
         loss = -score_tensor.mean()
         print(f">> DTO loss computed: {loss.item():.4f}")
@@ -92,11 +107,13 @@ class FlanT5FineTuner(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         input_ids, attention_mask = batch['input_ids'], batch['attention_mask']
-        expected_embeddings = self.forward(input_ids=input_ids, attention_mask=attention_mask, labels=None)
-        print(expected_embeddings.size())
 
-        edited_endings = [str(ee) for ee in batch['edited_ending']]
-        dto_val_loss = self.dto_loss_embeds(expected_embeddings, edited_endings)
+        # TODO: Replace commented code below for the generate function
+        # expected_embeddings = self.forward(input_ids=input_ids, attention_mask=attention_mask, labels=None)
+        # print(expected_embeddings.size())
+        #
+        # edited_endings = [str(ee) for ee in batch['edited_ending']]
+        # dto_val_loss = self.dto_loss_embeds(expected_embeddings, edited_endings)
         generated_texts = self.tokenizer.batch_decode(
             expected_embeddings.argmax(dim=-1), skip_special_tokens=True
         )
@@ -130,10 +147,12 @@ class FlanT5FineTuner(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         input_ids, attention_mask = batch['input_ids'], batch['attention_mask']
-        expected_embeddings = self.forward(input_ids=input_ids, attention_mask=attention_mask, labels=None)
-        
-        edited_endings = [str(ee) for ee in batch['edited_ending']]
-        dto_test_loss = self.dto_loss_embeds(expected_embeddings, edited_endings)
+
+        # TODO: Replace commented code below for the generate function
+        # expected_embeddings = self.forward(input_ids=input_ids, attention_mask=attention_mask, labels=None)
+        #
+        # edited_endings = [str(ee) for ee in batch['edited_ending']]
+        # dto_test_loss = self.dto_loss_embeds(expected_embeddings, edited_endings)
 
         generated_texts = self.tokenizer.batch_decode(
             expected_embeddings.argmax(dim=-1), skip_special_tokens=True
