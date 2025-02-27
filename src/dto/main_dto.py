@@ -142,7 +142,6 @@ def setup_model(model_dir, file_label="", checkpoint_path=None, load_from_mle=Fa
 
     return model
 
-
 def setup_trainer(max_epochs, model_dir):
     """
     Sets up the PyTorch Lightning Trainer with W&B logger and checkpointing.
@@ -173,13 +172,13 @@ def setup_trainer(max_epochs, model_dir):
     
     return trainer, checkpoint_callback
 
-
 def extract_epoch_from_checkpoint(checkpoint_path):
-    """
-    Extracts the epoch number from the checkpoint file name.
-    """
-    match = re.search(r"epoch=(\d+)", checkpoint_path)
-    return int(match.group(1)) if match else "Unknown"
+    # Change pattern to match "epoch-{number}"
+    match = re.search(r"epoch-(\d+)", checkpoint_path)
+    if match:
+        return int(match.group(1))
+    logger.warning(f"Could not extract epoch from checkpoint path: {checkpoint_path}")
+    return "Unknown"
 
 
 def main():
