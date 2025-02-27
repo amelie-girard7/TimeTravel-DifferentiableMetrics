@@ -1,3 +1,4 @@
+# /data/agirard/Projects/TimeTravel-DifferentiableMetrics/src/dto/utils/config.py
 import os
 from pathlib import Path
 
@@ -22,7 +23,7 @@ CONFIG = {
 
     # **Model & Training Settings**
     "model_name": os.getenv('MODEL_NAME', "facebook/bart-large-cnn"),  # Base model
-    "batch_size": int(os.getenv('BATCH_SIZE', 1)),   # Training batch size
+    "batch_size": int(os.getenv('BATCH_SIZE', 4)),   # Training batch size
     "num_workers": int(os.getenv('NUM_WORKERS', 3)), # Dataloader workers
     "learning_rate": float(os.getenv('LEARNING_RATE', 2e-5)),  # Optimizer learning rate
 
@@ -32,14 +33,14 @@ CONFIG = {
     "shuffle": True,        # Shuffle dataset during training
 
     # **Experiment Mode (DTO Training)**
-    "experiment_mode": "scratch",  # Options: "scratch" | "mle_checkpoint"
-    "dto_epochs": 1,  # Number of DTO training epochs
+    "experiment_mode": "mle_checkpoint",  # Options: "scratch" | "mle_checkpoint"
+    "dto_epochs": 3,  # Number of DTO training epochs
 
     # **MLE Checkpoint for DTO Training**
-    "dto_checkpoint_path":None,
+    "dto_checkpoint_path":"/data/agirard/Projects/TimeTravel-DifferentiableMetrics/models/mle_2025-02-26-11/mle_checkpoint_epoch-epoch=00-step-step=004180-val_loss=validation_mle_loss=0.92.ckpt",
 
     # **DTO Training Settings**
-    "dto_enabled": True,                 # Enable DTO mode
+    "dto_enabled": True, # Enable DTO mode
 
     # **Evaluation Metrics (BARTScore)**
     "reward_metric": "bart",                      # Primary evaluation metric
@@ -47,7 +48,6 @@ CONFIG = {
     "bart_scorer_checkpoint": "facebook/bart-large-cnn",  # BART model for evaluation
 
     # **Additional Training Options**
-    #"use_custom_loss": False,   # Use a custom loss function?
     "output_attentions": True,  # Enable model attention output (optional)
 }
 
