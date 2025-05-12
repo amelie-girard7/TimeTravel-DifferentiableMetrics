@@ -1,4 +1,4 @@
-# /data/agirard/Projects/TimeTravel-DifferentiableMetrics/src/utils/metrics.py
+# /data/agirard/Projects/TimeTravel-DifferentiableMetrics/src/mle/utils/metrics.py
 import logging
 import torch
 from src.mle.utils.config import CONFIG

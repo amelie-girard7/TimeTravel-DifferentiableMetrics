@@ -7,7 +7,7 @@ from transformers import BartForConditionalGeneration, BartTokenizer
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
-from src.dto.models.model import FlanT5FineTuner
+from src.dto.models.model import BartFineTuner
 from src.dto.data_loader import create_dataloaders
 from src.dto.utils.metrics import MetricsEvaluator
 from src.dto.utils.config import CONFIG
@@ -124,7 +124,7 @@ def setup_model(model_dir, file_label="", checkpoint_path=None, load_from_mle=Fa
         checkpoint["state_dict"] = state_dict
 
         # Load model without expecting `bart_scorer`
-        model = FlanT5FineTuner.load_from_checkpoint(
+        model = BartFineTuner.load_from_checkpoint(
             checkpoint_path,
             model_name=CONFIG["model_name"],
             model_dir=model_dir,
@@ -134,7 +134,7 @@ def setup_model(model_dir, file_label="", checkpoint_path=None, load_from_mle=Fa
 
     else:
         logger.info(f"Initializing a fresh DTO model: {CONFIG['model_name']} with label {file_label}")
-        model = FlanT5FineTuner(
+        model = BartFineTuner(
             model_name=CONFIG["model_name"],
             model_dir=model_dir,
             file_label="_dto"

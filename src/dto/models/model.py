@@ -11,7 +11,7 @@ from src.dto.utils.metrics import MetricsEvaluator
 
 logger = logging.getLogger(__name__)
 
-class FlanT5FineTuner(pl.LightningModule):
+class BartFineTuner(pl.LightningModule):
     """
     A DTO-only model for Differentiable Training Objectives.
     It always produces soft embeddings and uses a differentiable loss.
