@@ -17,9 +17,9 @@ CONFIG = {
     "dataset_type": "TimeTravel",   # Options: "ART", "TimeTravel", "AblatedTimeTravel"
 
     # **Dataset Files**
-    "train_file": "train_supervised_small_sample.json",
-    "dev_file": "dev_data_sample.json",
-    "test_file": "test_data_sample.json",
+    "train_file": "train_supervised_small.json",
+    "dev_file": "dev_data.json",
+    "test_file": "test_data.json",
 
     # **Model & Training Settings**
     "model_name": os.getenv('MODEL_NAME', "facebook/bart-large-cnn"),  # Base model
@@ -34,10 +34,10 @@ CONFIG = {
 
     # **Experiment Mode (DTO Training)**
     "experiment_mode": "mle_checkpoint",  # Options: "scratch" | "mle_checkpoint"
-    "dto_epochs": 3,  # Number of DTO training epochs
+    "dto_epochs": 1,  # Number of DTO training epochs
 
     # **MLE Checkpoint for DTO Training**
-    "dto_checkpoint_path":"/data/agirard/Projects/TimeTravel-DifferentiableMetrics/models/mle_2025-02-26-11/mle_checkpoint_epoch-epoch=00-step-step=004180-val_loss=validation_mle_loss=0.92.ckpt",
+    "dto_checkpoint_path":"/data/agirard/Projects/TimeTravel-DifferentiableMetrics/models/mle_2025-03-31-19/mle_checkpoint_epoch-epoch=00-step-step=004180-val_loss-validation_mle_loss=0.91.ckpt", #MLE6
 
     # **DTO Training Settings**
     "dto_enabled": True, # Enable DTO mode

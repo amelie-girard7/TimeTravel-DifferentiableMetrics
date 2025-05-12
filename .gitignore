@@ -150,7 +150,7 @@ data/
 bertviz/
 
 # Additional directories to ignore
-src/BARTScore_metric/
+#src/BARTScore_metric/
 src/__pycache__/
 
 # Ignore specific folders
@@ -175,5 +175,5 @@ src/wandb/
 src/mle/wandb/
 src/dto/wandb/
 
-
+src/dto/lightning_logs/
 
