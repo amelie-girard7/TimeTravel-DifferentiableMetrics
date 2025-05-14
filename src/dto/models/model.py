@@ -60,7 +60,6 @@ class BartFineTuner(pl.LightningModule):
         print(">> Setting BART scorer to eval()")
         return self
 
-
     def forward(self, input_ids, attention_mask, labels=None, **kwargs):
         print(">> Forward pass in DTO mode")
         outputs = self.model(
@@ -98,129 +97,195 @@ class BartFineTuner(pl.LightningModule):
         if not loss.requires_grad:
             loss.requires_grad = True
         return loss
-
+    
     def training_step(self, batch, batch_idx):
+        # Forward pass
         input_ids, attention_mask = batch['input_ids'], batch['attention_mask']
-        expected_embeddings = self.forward(input_ids=input_ids, attention_mask=attention_mask, labels=None)
+        expected_embeddings = self.forward(input_ids=input_ids, 
+                                        attention_mask=attention_mask, 
+                                        labels=None)
+        
+        # Loss calculation
         edited_endings = [str(ee) for ee in batch['edited_ending']]
         dto_loss_val = self.dto_loss_embeds(expected_embeddings, edited_endings)
-        self.log('training_dto_loss', dto_loss_val, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        
+        # Organized metrics
+        metrics = {
+            'train/dto_loss': dto_loss_val,
+            'train/embed_mean': expected_embeddings.mean().detach().cpu(),
+            'train/embed_std': expected_embeddings.std().detach().cpu(),
+            'train/embed_min': expected_embeddings.min().detach().cpu(),
+            'train/embed_max': expected_embeddings.max().detach().cpu()
+        }
+        
+        # Strategic logging
+        self.log_dict(
+            metrics,
+            on_step=True,
+            on_epoch=True,
+            prog_bar={'train/dto_loss': True},  # Only show loss in progress bar
+            logger=True
+        )
+        
         return dto_loss_val
 
     def validation_step(self, batch, batch_idx):
-        input_ids, attention_mask = batch['input_ids'], batch['attention_mask']
-
-        # TODO: Replace commented code below for the generate function
-        # expected_embeddings = self.forward(input_ids=input_ids, attention_mask=attention_mask, labels=None)
-        # print(expected_embeddings.size())
-        #
-        # edited_endings = [str(ee) for ee in batch['edited_ending']]
-        # dto_val_loss = self.dto_loss_embeds(expected_embeddings, edited_endings)
-        # Unpack input tensors
-        # Generate token IDs using the model's generate() method
-
-
-
-        # --- Differentiable Loss Computation ---
-        # Run forward pass to get soft outputs (expected embeddings)
-        expected_embeddings = self.forward(input_ids=input_ids, attention_mask=attention_mask, labels=None)
-        print(expected_embeddings.size())
+        # Unpack batch
+        input_ids = batch['input_ids']
+        attention_mask = batch['attention_mask']
         edited_endings = [str(ee) for ee in batch['edited_ending']]
-        dto_val_loss = self.dto_loss_embeds(expected_embeddings, edited_endings)
+        premises = batch['premise']
+        counterfactuals = [str(cf) for cf in batch['counterfactual']]
+        initials = [str(init) for init in batch['initial']]
+        originals = [str(oe) for oe in batch['original_ending']]
 
-        # --- Non-differentiable Evaluation (for logging purposes) ---
-        # Use generate() to produce token IDs (non-differentiable) for evaluation
-        generated_tokens = self.model.generate(
+        # 1. Differentiable Forward Pass (for both tracks)
+        expected_embeddings = self.forward(
             input_ids=input_ids,
             attention_mask=attention_mask
         )
-        #print("Generated tokens size:", generated_tokens.size())
 
-        # Decode the generated tokens to obtain text
-        generated_texts = self.tokenizer.batch_decode(
-            generated_tokens, skip_special_tokens=True
+        # ===== SOFT VALIDATION TRACK =====
+        # 2. DTO Loss (same as training)
+        dto_loss = self.dto_loss_embeds(expected_embeddings, edited_endings)
+
+        # 3. Embedding-based Metrics
+        embed_edited = self.metrics_evaluator.calculate_score_embeds(
+            expected_embeddings, edited_endings
+        ).mean()
+        embed_cf = self.metrics_evaluator.calculate_score_embeds(
+            expected_embeddings, counterfactuals
+        ).mean()
+
+        # ===== HARD VALIDATION TRACK =====
+        # 4. Text Generation
+        with torch.no_grad():
+            generated_tokens = self.model.generate(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                max_length=CONFIG["max_gen_length"]
+            )
+            generated_texts = self.tokenizer.batch_decode(
+                generated_tokens,
+                skip_special_tokens=True
+            )
+
+        # 5. Text-based Metrics
+        text_metrics = self.metrics_evaluator.calculate_bart_similarity(
+            generated_texts=generated_texts,
+            edited_endings=edited_endings,
+            counterfactuals=counterfactuals,
+            initials=initials,
+            original_endings=originals
         )
-         # Convert ground-truth fields to strings
-        #edited_endings = [str(ee) for ee in batch['edited_ending']]
-        original_endings = [str(oe) for oe in batch['original_ending']]
-        counterfactuals = [str(cf) for cf in batch['counterfactual']]
-        initials = [str(init) for init in batch['initial']]
 
-        bart_scores = self.metrics_evaluator.calculate_and_log_bart_similarity(
-            generated_texts, edited_endings, counterfactuals, initials, [], original_endings, logger
-        )
+        # ===== COMBINED LOGGING =====
+        self.log_dict({
+            # Soft track metrics
+            'val/dto_loss': dto_loss,
+            'val/embed_edited': embed_edited,
+            'val/embed_cf': embed_cf,
+            # Hard track metrics
+            **{f'val/text_{k}': v for k, v in text_metrics.items()}
+        }, prog_bar=True)
 
-        for metric_name, score in bart_scores.items():
-            self.log(metric_name, score, on_epoch=True, prog_bar=True, logger=True)
-        self.log('validation_dto_loss', dto_val_loss, on_epoch=True, prog_bar=True, logger=True)
-
-        # Store validation details for later CSV logging.
+        # Store details including both soft and hard results
         for i in range(len(generated_texts)):
-            val_entry = {
-                'Epoch': self.current_epoch,
-                'Premise': batch['premise'][i],
-                'Edited Ending': edited_endings[i],
-                'Counterfactual': counterfactuals[i],
-                'Initial': initials[i],
-                'Original Ending': original_endings[i],
-                'Generated Text': generated_texts[i]
-            }
-            self.epoch_validation_details.append(val_entry)
-        return dto_val_loss
+            self.epoch_validation_details.append({
+                'epoch': self.current_epoch,
+                # Hard track info
+                'premise': premises[i],
+                'generated': generated_texts[i],
+                'edited': edited_endings[i],
+                'counterfactual': counterfactuals[i],
+                'original': originals[i],
+                # Soft track info
+                'soft_embed_mean': expected_embeddings[i].mean().item(),
+                'soft_embed_std': expected_embeddings[i].std().item(),
+                'dto_loss': dto_loss.item(),
+                **{f'metric_{k}': v for k, v in text_metrics.items()}
+            })
+
+        return dto_loss  # <= Return only dto_loss so early stopping can track it
 
     def test_step(self, batch, batch_idx):
-        input_ids, attention_mask = batch['input_ids'], batch['attention_mask']
+        # Unpack batch
+        input_ids = batch['input_ids']
+        attention_mask = batch['attention_mask']
+        edited_endings = [str(ee) for ee in batch['edited_ending']]
+        premises = batch['premise']
+        counterfactuals = [str(cf) for cf in batch['counterfactual']]
+        initials = [str(init) for init in batch['initial']]
+        originals = [str(oe) for oe in batch['original_ending']]
 
-        # TODO: Replace commented code below for the generate function
-        # expected_embeddings = self.forward(input_ids=input_ids, attention_mask=attention_mask, labels=None)
-        #
-        # edited_endings = [str(ee) for ee in batch['edited_ending']]
-        # dto_test_loss = self.dto_loss_embeds(expected_embeddings, edited_endings)
-
-        # Generate token IDs using the model's generate() method
-        generated_tokens = self.model.generate(
+        # 1. Differentiable Forward Pass (for both tracks)
+        expected_embeddings = self.forward(
             input_ids=input_ids,
             attention_mask=attention_mask
         )
-        print("Generated tokens size:", generated_tokens.size())
 
-        # Decode the generated tokens to obtain text
-        generated_texts = self.tokenizer.batch_decode(
-            generated_tokens, skip_special_tokens=True
+        # ===== SOFT TEST TRACK =====
+        # 2. DTO Loss (same as training)
+        dto_loss = self.dto_loss_embeds(expected_embeddings, edited_endings)
+
+        # 3. Embedding-based Metrics
+        embed_edited = self.metrics_evaluator.calculate_score_embeds(
+            expected_embeddings, edited_endings
+        ).mean()
+        embed_cf = self.metrics_evaluator.calculate_score_embeds(
+            expected_embeddings, counterfactuals
+        ).mean()
+
+        # ===== HARD TEST TRACK =====
+        # 4. Text Generation
+        with torch.no_grad():
+            generated_tokens = self.model.generate(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                max_length=CONFIG["max_gen_length"]
+            )
+            generated_texts = self.tokenizer.batch_decode(
+                generated_tokens,
+                skip_special_tokens=True
+            )
+
+        # 5. Text-based Metrics
+        text_metrics = self.metrics_evaluator.calculate_bart_similarity(
+            generated_texts=generated_texts,
+            edited_endings=edited_endings,
+            counterfactuals=counterfactuals,
+            initials=initials,
+            original_endings=originals
         )
 
-         # Convert ground-truth fields to strings
-        edited_endings = [str(ee) for ee in batch['edited_ending']]
-        original_endings = [str(oe) for oe in batch['original_ending']]
-        counterfactuals = [str(cf) for cf in batch['counterfactual']]
-        initials = [str(init) for init in batch['initial']]
+        # ===== COMBINED LOGGING =====
+        self.log_dict({
+            # Soft track metrics
+            'test/dto_loss': dto_loss,
+            'test/embed_edited': embed_edited,
+            'test/embed_cf': embed_cf,
+            # Hard track metrics
+            **{f'test/text_{k}': v for k, v in text_metrics.items()}
+        }, prog_bar=True)
 
-        # Calculate evaluation metrics using BART similarity
-        bart_scores = self.metrics_evaluator.calculate_and_log_bart_similarity(
-            generated_texts, edited_endings, counterfactuals, initials, [], original_endings, logger
-        )
-
-        # Log each evaluation metric
-        for metric_name, score in bart_scores.items():
-            self.log(metric_name, score, on_epoch=True, prog_bar=True, logger=True)
-
-        # self.log('test_dto_loss', dto_test_loss, on_epoch=True, prog_bar=True, logger=True)
-        
+        # Store details including both soft and hard results
         for i in range(len(generated_texts)):
-            test_entry = {
-                'Epoch': self.current_epoch,
-                'Premise': batch.get('premise', [''])[i],
-                'Edited Ending': edited_endings[i],
-                'Counterfactual': counterfactuals[i],
-                'Initial': initials[i],
-                'Original Ending': original_endings[i],
-                'Generated Text': generated_texts[i]
-            }
-            test_entry.update(bart_scores)
-            self.epoch_test_details.append(test_entry)
+            self.epoch_test_details.append({
+                'epoch': self.current_epoch,
+                # Hard track info
+                'premise': premises[i],
+                'generated': generated_texts[i],
+                'edited': edited_endings[i],
+                'counterfactual': counterfactuals[i],
+                'original': originals[i],
+                # Soft track info
+                'soft_embed_mean': expected_embeddings[i].mean().item(),
+                'soft_embed_std': expected_embeddings[i].std().item(),
+                'dto_loss': dto_loss.item(),
+                **{f'metric_{k}': v for k, v in text_metrics.items()}
+            })
 
-        # Return None since loss is not tracked in the test phase
-        return None
+        return None  
 
     def on_validation_epoch_end(self):
         """
@@ -259,4 +324,5 @@ class BartFineTuner(pl.LightningModule):
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=CONFIG["learning_rate"])
+
 

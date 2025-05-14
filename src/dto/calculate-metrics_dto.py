@@ -56,8 +56,6 @@ def process_repository(repo_path, prefix):
     Process all CSV files in the given repository that start with the specified prefix.
     The output metric files will be saved in the same repository.
     
-    For example, if prefix is 'validation_details_pg_', then only files starting with that
-    prefix will be processed.
     """
     if os.path.isdir(repo_path):
         # List all CSV files in the repository that start with the given prefix.
@@ -78,32 +76,21 @@ def main():
     Main function to process multiple repositories.
     For each repository, you specify a prefix to select the files you want.
     For example:
-      - For validation files, use prefix 'validation_details_pg_'
-      - For test files, use prefix 'test_details_pg_'
+      - For test files, use prefix 'test_details_dto'
     The output file is saved in the same directory as the input file.
     """
     # List of repository directories to process.
     repo_paths = [
-        #'/data/agirard/Projects/TimeTravel-PolicyGradientRL/models/pg_2025-03-04-07',  # T5-base, BART, score+Delta_M1, temp 0.7
-        #'/data/agirard/Projects/TimeTravel-PolicyGradientRL/models/pg_2025-03-05-17',  # T5-base, BERT, score+Delta_M1, temp 0.7
-        #'/data/agirard/Projects/TimeTravel-PolicyGradientRL/models/pg_2025-03-03-11',  # T5-base, BART, Delta_M1, temp 0.7
-        # '/data/agirard/Projects/TimeTravel-PolicyGradientRL/models/pg_2025-02-27-09',  # Dynamic, BART, temp 0.7
-        #'/data/agirard/Projects/TimeTravel-PolicyGradientRL/models/pg_2025-02-17-09',  # Dynamic, BART+4, temp 1.5
-        # '/data/agirard/Projects/TimeTravel-PolicyGradientRL/models/pg_2025-02-12-09',  # Dynamic, BART+4, temp 1
-        #'/data/agirard/Projects/TimeTravel-PolicyGradientRL/models/pg_2025-02-06-17',  # Dynamic, BART+4, temp 0.7
-        #'/data/agirard/Projects/TimeTravel-PolicyGradientRL/models/pg_2025-02-01-15',  # Fixed0.5, Bart+4, temp 1
-        #'/data/agirard/Projects/TimeTravel-PolicyGradientRL/models/pg_2025-02-02-16',  # Fixed0.5, Bart+4, temp 0.7
-        # '/data/agirard/Projects/TimeTravel-PolicyGradientRL/models/pg_2025-03-11-11',  # Fixed0.5, Bart, temp 0.7
-        '/data/agirard/Projects/TimeTravel-PolicyGradientRL/models/pg_2025-03-13-09',  # Fixed0.3, Bart, temp 0.7
+        '/data/agirard/Projects/TimeTravel-DifferentiableMetrics/models/dto_2025-05-12-16',  # 
     ]
 
-    # Process validation files
-    for repo in repo_paths:
-        process_repository(repo, prefix='validation_details_pg_')
+    # # Process validation files
+    # for repo in repo_paths:
+    #     process_repository(repo, prefix='validation_details_pg_')
     
     # Process test files
     for repo in repo_paths:
-        process_repository(repo, prefix='test_details_pg_')
+        process_repository(repo, prefix='test_details_dto')
 
 if __name__ == "__main__":
     main()
