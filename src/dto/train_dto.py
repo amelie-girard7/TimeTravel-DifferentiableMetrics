@@ -15,6 +15,7 @@ from src.dto.utils.config import CONFIG
 import pandas as pd
 import re
 
+
 # Add project root to Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 # Ensure safe loading of checkpoints in PyTorch 2.6+
 torch.serialization.add_safe_globals([os.path, re, datetime])
+# torch.serialization.add_safe_globals([pathlib.Path, os.path, re, datetime])
 
 def validate_config():
     """Validate critical configuration parameters"""
@@ -46,8 +48,8 @@ def setup_model(model_dir, file_label="", checkpoint_path=None):
             raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
         # Add safe globals for PyTorch 2.6+
-        import pathlib
-        torch.serialization.add_safe_globals([pathlib.Path, os.path, re, datetime])
+        # import pathlib
+        # torch.serialization.add_safe_globals([pathlib.Path, os.path, re, datetime])
 
         # Load checkpoint with validation
         checkpoint = torch.load(
