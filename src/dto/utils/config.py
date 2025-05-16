@@ -31,7 +31,7 @@ CONFIG = {
     "max_length": 512,      # Max token length for input sequences
     "max_gen_length": 250,  # Max token length for generated text
     "shuffle": True,        # Shuffle dataset during training
-    "dto_epochs": 5,  # Number of DTO training epochs
+    "dto_epochs": 2,  # Number of DTO training epochs
 
     # **MLE Checkpoint for DTO Training**
     "dto_checkpoint_path":"/data/agirard/Projects/TimeTravel-DifferentiableMetrics/models/mle_2025-03-31-19/mle_checkpoint_epoch-epoch=00-step-step=004180-val_loss-validation_mle_loss=0.91.ckpt", #MLE6

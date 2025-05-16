@@ -120,7 +120,7 @@ def setup_trainer(max_epochs, model_dir):
             ),
             EarlyStopping(
                 monitor='val/dto_loss',
-                patience=3,
+                patience=10,
                 mode='min',
                 verbose=True,
                 check_finite=True
@@ -133,7 +133,8 @@ def setup_trainer(max_epochs, model_dir):
             devices=1,
             logger=wandb_logger,
             callbacks=callbacks,
-            val_check_interval=0.25,  # Validate 4 times per epoch
+            #val_check_interval=0.25,  # Validate 4 times per epoch
+            val_check_interval=1, 
             log_every_n_steps=10,
             deterministic=True,
             enable_progress_bar=True,
@@ -145,9 +146,9 @@ def setup_trainer(max_epochs, model_dir):
         logger.error(f"Trainer setup failed: {str(e)}")
         raise
 
-
 def main():
     try:
+        os.environ['CUDA_VISIBLE_DEVICES'] = '0'
         # Initial validation
         validate_config()
         
