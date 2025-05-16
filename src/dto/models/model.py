@@ -20,38 +20,96 @@ class BartFineTuner(pl.LightningModule):
     def __init__(self, model_name, model_dir, file_label=""):
         super().__init__()
         self.save_hyperparameters()
+        # 1. Basic setup
         self.model_dir = Path(model_dir)
         self.file_label = file_label
 
-        # Load the main generation model and tokenizer.
+        # 2. Determine target device
+        self.target_device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        print(f"\n=== Device Configuration ===")
+        print(f"Target computation device: {self.target_device}")
+
+        # 3. Load main model components
+        print("\n=== Main Model Loading ===")
+        print("Loading BART model and tokenizer...")
         self.model = BartForConditionalGeneration.from_pretrained(model_name)
         self.tokenizer = BartTokenizer.from_pretrained(model_name)
+
+        # 4. Initialize metrics evaluator
+        print("\n=== Metrics Evaluator Setup ===")
+        print("Initializing MetricsEvaluator...")
+        self.metrics_evaluator = MetricsEvaluator()
         
         # Paths for CSV logging.
         self.val_csv_file_path = self.model_dir / f"validation_details{self.file_label}.csv"
         self.test_csv_file_path = self.model_dir / f"test_details{self.file_label}.csv"
 
-        # Buffers for logging details.
-        self.epoch_validation_details = []
-        self.epoch_scores = []
-        self.epoch_test_details = []
-        self.epoch_test_scores = []
-        self.metrics_evaluator = MetricsEvaluator()
-
-        # Used in the print
+        # 5. Store original embeddings
+        print("\n=== Embedding Configuration ===")
+        print("Storing original BART scorer embeddings...")
         self.bart_scorer_og_embed = self.metrics_evaluator.bart_scorer.model.get_input_embeddings().weight.clone()
 
-        # Gumbel-Softmax parameters from config
+        # 6. Gumbel-Softmax setup
+        print("\n=== Gumbel-Softmax Configuration ===")
         self.use_gumbel = CONFIG["use_gumbel"]
         self.temperature = CONFIG["gumbel_temperature"]
         self.gumbel_hard = CONFIG["gumbel_hard"]
         self.anneal_rate = CONFIG["gumbel_anneal_rate"] if CONFIG["gumbel_annealing"] else None
         self.min_temp = CONFIG["gumbel_min_temp"]
 
-        logger.info("Initializing DTO mode...")
+        # 7. Move everything to target device
+        print("\n=== Device Synchronization ===")
+        print("Moving all components to target device...")
+        self.to(self.target_device)
+        self.model = self.model.to(self.target_device)
+        self.metrics_evaluator.bart_scorer.model = self.metrics_evaluator.bart_scorer.model.to(self.target_device)
+        self.bart_scorer_og_embed = self.bart_scorer_og_embed.to(self.target_device)
+        if hasattr(self.tokenizer, 'device'):
+            self.tokenizer.device = self.target_device
 
-        logger.info(f"Model initialized: {model_name}")
+        # Buffers for logging details.
+        self.epoch_validation_details = []
+        self.epoch_scores = []
+        self.epoch_test_details = []
+        self.epoch_test_scores = []
 
+        # 10. Verification and Debug Output
+        # print("\n=== System Verification ===")
+        # print("[Component Devices]")
+        # print(f"Main model: {next(self.model.parameters()).device}")
+        # print(f"Scorer model: {next(self.metrics_evaluator.bart_scorer.model.parameters()).device}")
+        # print(f"Embeddings: {self.bart_scorer_og_embed.device}")
+        # print(f"Tokenizer: {getattr(self.tokenizer, 'device', 'N/A')}")
+        
+        # print("\n[Training Modes]")
+        # print(f"Main model training: {self.model.training}")
+        # print(f"Scorer model training: {self.metrics_evaluator.bart_scorer.model.training}")
+        
+        print("\n[Parameter Status]")
+        frozen_main = sum(1 for p in self.model.parameters() if not p.requires_grad)
+        total_main = sum(1 for _ in self.model.parameters())
+        frozen_scorer = sum(1 for p in self.metrics_evaluator.bart_scorer.model.parameters() if not p.requires_grad)
+        total_scorer = sum(1 for _ in self.metrics_evaluator.bart_scorer.model.parameters())
+        print(f"Main model - Frozen: {frozen_main}/{total_main}")
+        print(f"Scorer model - Frozen: {frozen_scorer}/{total_scorer}")
+        
+        # print("\n[Gumbel Parameters]")
+        # print(f"Use Gumbel: {self.use_gumbel}")
+        # print(f"Temperature: {self.temperature}")
+        # print(f"Hard: {self.gumbel_hard}")
+        # print(f"Annealing: {'Enabled' if CONFIG['gumbel_annealing'] else 'Disabled'}")
+        # if CONFIG["gumbel_annealing"]:
+        #     print(f"  Rate: {self.anneal_rate}")
+        #     print(f"  Min temp: {self.min_temp}")
+        
+        # print("\n[Logging Paths]")
+        # print(f"Validation log: {self.val_csv_file_path}")
+        # print(f"Test log: {self.test_csv_file_path}")
+        # print(f"Directory exists: {self.model_dir.exists()}")
+        
+        print("\n=== Initialization Complete ===")
+        logger.info("Model initialized successfully")
+        
     def train(self, mode=True):
         """
         Override the train method to ensure `bart_scorer` remains in evaluation mode.
@@ -62,119 +120,67 @@ class BartFineTuner(pl.LightningModule):
         return self
 
     def forward(self, input_ids, attention_mask, labels=None, **kwargs):
-        
-        print(">> Forward pass in DTO mode")
-        # Add input validation
-        print(f">> Input IDs shape: {input_ids.shape}")
-        print(f">> Attention mask shape: {attention_mask.shape}")
-        print(f">> Input IDs sample: {input_ids[0][:10]}...")
+        # ===== 1. Forward Pass =====
         outputs = self.model(
             input_ids=input_ids,
             attention_mask=attention_mask,
             output_hidden_states=True,
             return_dict=True
         )
-
-        # Add logging for model outputs
-        print(f">> Output logits shape: {outputs.logits.shape}")
-        print(f">> Logits range: [{outputs.logits.min().item():.4f}, {outputs.logits.max().item():.4f}]")
-
+        
+        # ===== 2. Device Safety =====
         logits = outputs.logits  # [batch, seq_len, vocab_size]
         device = logits.device  # Ensure we use the same device for all tensors
 
+        # ===== 3. Debug Prints =====
+        print("\n>> Forward Pass")
+        print(f"Logits: {logits.shape} (device: {device})")
+        print(f"Range: [{logits.min().item():.2f}, {logits.max().item():.2f}]")
 
-        if self.use_gumbel:
-            print(f">> Applying Gumbel-Softmax with temperature={self.temperature:.4f}")
-            probs = self.gumbel_softmax(logits)
+        # ===== 4. Gumbel-Softmax =====
+        probs = self.gumbel_softmax(logits)
+        print(f"Probs: μ={probs.mean().item():.4f} σ={probs.std().item():.4f}")
             
-            # Log temperature and distribution stats
-            stats = self.analyze_distributions(logits, probs)
-        else:
-            probs = torch.softmax(logits, dim=-1)
-    
-
-        # Get the embedding matrix and explicitly move it to the logits' device
-        embedding_matrix = self.metrics_evaluator.bart_scorer.model.get_input_embeddings().weight.to(device)
-
-        # Enhanced embedding checks
-        print(">> BART Scorer embeddings stats:")
-        print(f"  - Shape: {embedding_matrix.shape}")
-        print(f"  - Requires grad: {embedding_matrix.requires_grad}")
-        print(f"  - Mean: {embedding_matrix.mean().item():.4f}")
-        print(f"  - Std: {embedding_matrix.std().item():.4f}")
         
-        # Compare with original embeddings
-        diff = torch.abs(embedding_matrix - self.bart_scorer_og_embed.to(device))
-        print(f">> Max diff from original: {diff.max().item():.4f}")
-        print(f">> Mean diff from original: {diff.mean().item():.4f}")
-
+        # ===== 4. Gumbel-Softmax =====
+        embedding_matrix = self.metrics_evaluator.bart_scorer.model.get_input_embeddings().weight.to(device)
         expected_embeddings = torch.matmul(probs, embedding_matrix)
-        print(">> Expected embeddings stats:")
-        print(f"  - Shape: {expected_embeddings.shape}")
-        print(f"  - Mean: {expected_embeddings.mean().item():.4f}")
-        print(f"  - Std: {expected_embeddings.std().item():.4f}")
-        print(f"  - Min: {expected_embeddings.min().item():.4f}")
-        print(f"  - Max: {expected_embeddings.max().item():.4f}")
+
+        print("\n>> Output Embeddings")
+        print(f"Shape: {expected_embeddings.shape}")
+        print(f"Grad: {'ON' if expected_embeddings.requires_grad else 'OFF'}")
+        print(f"Stats: μ={expected_embeddings.mean().item():.4f} (Δmax={torch.abs(embedding_matrix - self.bart_scorer_og_embed.to(device)).max().item():.4f})")
 
         return expected_embeddings
 
-    # def dto_loss_embeds(self, expected_embeddings, edited_endings):
-    #     print(">> Computing DTO loss from expected embeddings")
-    #     # Enhanced logging (NO functional changes)
-    #     print(f">> Expected embeddings device: {expected_embeddings.device}")
-    #     print(f">> Expected embeddings stats - mean: {expected_embeddings.mean().item():.4f}, "
-    #         f"std: {expected_embeddings.std().item():.4f}")
-    #     print(f">> Sample edited ending: {edited_endings[0][:100]}{'...' if len(edited_endings[0]) > 100 else ''}")
-
-    #     # Original parameter check (unchanged)
-    #     for param in self.metrics_evaluator.bart_scorer.model.parameters():
-    #         if param.requires_grad:
-    #             raise ValueError("BART Scorer model is not in eval mode")
-            
-    #     # Additional verification logging
-    #     frozen_params = sum(1 for p in self.metrics_evaluator.bart_scorer.model.parameters() if not p.requires_grad)
-    #     total_params = sum(1 for _ in self.metrics_evaluator.bart_scorer.model.parameters())
-    #     print(f">> BART Scorer verification - Frozen params: {frozen_params}/{total_params}")
-
-    #     # Original score calculation (unchanged)
-    #     score_tensor = self.metrics_evaluator.calculate_score_embeds(expected_embeddings, edited_endings)
-
-    #      # Additional score statistics logging
-    #     print(f">> Score tensor stats - mean: {score_tensor.mean().item():.4f}, "
-    #         f"std: {score_tensor.std().item():.4f}, "
-    #         f"min: {score_tensor.min().item():.4f}, "
-    #         f"max: {score_tensor.max().item():.4f}")
-
-    #     # Original loss calculation (unchanged)
-    #     loss = -score_tensor.mean()
-    #     print(f">> DTO loss computed: {loss.item():.4f}")
-
-    #     # Original gradient check (unchanged)
-    #     if not loss.requires_grad:
-    #         print("!!! Warning: Loss tensor requires_grad=False, forcing to True !!!")
-    #         loss.requires_grad = True
-    #     return loss
-
-    def dto_loss_embeds(self, expected_embeddings, edited_endings):
+    def dto_loss_embeds(self, expected_embeddings, edited_endings, validation=False):
         """Compute DTO loss with gradient preservation and debugging"""
+        print(f"\n=== DTO Loss ({'VALIDATION' if validation else 'TRAINING'}) ===")
         
         # ===== 1. Input Validation =====
-        print("\n=== DTO Loss Debug ===")
-        print(f"Input embeddings shape: {expected_embeddings.shape}")
-        print(f"Input embeddings requires_grad: {expected_embeddings.requires_grad}")
-        print(f"Input embeddings device: {expected_embeddings.device}")
+        # print("\n=== DTO Loss Debug ===")
+        # print(f"Input embeddings shape: {expected_embeddings.shape}")
+        # print(f"Input embeddings requires_grad: {expected_embeddings.requires_grad}")
+        # print(f"Input embeddings device: {expected_embeddings.device}")
         
         # ===== 2. Gradient Preservation =====
-        if not expected_embeddings.requires_grad:
-            print("!! WARNING: Input embeddings don't require grad - cloning with requires_grad=True !!")
-            expected_embeddings = expected_embeddings.clone().requires_grad_(True)
+        if validation:
+            # For validation, ensure no gradients
+            with torch.no_grad():
+                expected_embeddings = expected_embeddings.detach()
+                print("Validation mode - gradients disabled")
+        else:
+            # For training, ensure gradients
+            if not expected_embeddings.requires_grad:
+                print("Training mode - enabling gradients for embeddings")
+                expected_embeddings = expected_embeddings.requires_grad_(True)
         
         # ===== 3. BART Scorer Verification =====
-        print("\n--- BART Scorer Status ---")
-        frozen_params = sum(1 for p in self.metrics_evaluator.bart_scorer.model.parameters() if not p.requires_grad)
-        total_params = sum(1 for _ in self.metrics_evaluator.bart_scorer.model.parameters())
-        print(f"Frozen params: {frozen_params}/{total_params}")
-        print(f"Scorer model training mode: {self.metrics_evaluator.bart_scorer.model.training}")
+        # print("\n--- BART Scorer Status ---")
+        # frozen_params = sum(1 for p in self.metrics_evaluator.bart_scorer.model.parameters() if not p.requires_grad)
+        # total_params = sum(1 for _ in self.metrics_evaluator.bart_scorer.model.parameters())
+        # print(f"Frozen params: {frozen_params}/{total_params}")
+        # print(f"Scorer model training mode: {self.metrics_evaluator.bart_scorer.model.training}")
         
         # ===== 4. Score Calculation =====
         print("\n--- Calculating Scores ---")
@@ -198,11 +204,6 @@ class BartFineTuner(pl.LightningModule):
         print("\n--- Loss Computation ---")
         loss = -score_tensor.mean()
         
-        # Force gradient retention if needed (shouldn't be necessary with proper flow)
-        if not loss.requires_grad:
-            print("!! WARNING: Loss requires_grad=False - creating new tensor with gradients !!")
-            loss = loss.clone().requires_grad_(True)
-        
         # ===== 6. Final Checks =====
         print("\n--- Final Verification ---")
         print(f"Loss value: {loss.item():.4f}")
@@ -212,22 +213,46 @@ class BartFineTuner(pl.LightningModule):
         # Verify gradient chain
         if loss.grad_fn is None:
             print("!! CRITICAL WARNING: Loss has no gradient function !!")
-            print("Full grad_fn chain:")
-            current = expected_embeddings.grad_fn
-            while current is not None:
-                print(f"  - {str(current)}")
-                current = current.next_functions[0][0] if current.next_functions else None
         else:
-            print("Youpiii Valid gradient chain detected")
+            print("Valid gradient chain detected")
         
         return loss
+
+    def dto_loss_embeds(self, expected_embeddings, edited_endings, validation=False):
+        """Compute DTO loss with proper gradient handling"""
+        if validation:
+            # For validation, ensure no gradients
+            with torch.no_grad():
+                expected_embeddings = expected_embeddings.detach()
+        else:
+            # For training, ensure gradients
+            if not expected_embeddings.requires_grad:
+                expected_embeddings = expected_embeddings.requires_grad_(True)
+        
+        # Tokenize targets
+        encoded_tgt = self.metrics_evaluator.bart_scorer.tokenizer(
+            edited_endings,
+            max_length=self.metrics_evaluator.bart_scorer.max_length,
+            truncation=True,
+            padding=True,
+            return_tensors='pt'
+        ).to(expected_embeddings.device)
+        
+        # Forward pass
+        output = self.metrics_evaluator.bart_scorer.model(
+            inputs_embeds=expected_embeddings,
+            attention_mask=torch.ones_like(expected_embeddings[..., 0]),
+            labels=encoded_tgt['input_ids']
+        )
+        
+        return -output.loss  # Negative because we want to maximize the score  
 
     def training_step(self, batch, batch_idx):
         # Enhanced batch logging
         print(f"\n=== Training Step {batch_idx} ===")
-        print(f"Batch keys: {batch.keys()}")
-        print(f"Input IDs shape: {batch['input_ids'].shape}")
-        print(f"Sample edited ending: {batch['edited_ending'][0]}")
+        # print(f"Batch keys: {batch.keys()}")
+        # print(f"Input IDs shape: {batch['input_ids'].shape}")
+        # print(f"Sample edited ending: {batch['edited_ending'][0]}")
 
         # Forward pass
         input_ids, attention_mask = batch['input_ids'], batch['attention_mask']
@@ -293,153 +318,68 @@ class BartFineTuner(pl.LightningModule):
         return dto_loss_val
 
     def validation_step(self, batch, batch_idx):
-        # Unpack batch
-        input_ids = batch['input_ids']
-        attention_mask = batch['attention_mask']
-        edited_endings = [str(ee) for ee in batch['edited_ending']]
-        premises = batch['premise']
-        counterfactuals = [str(cf) for cf in batch['counterfactual']]
-        initials = [str(init) for init in batch['initial']]
-        originals = [str(oe) for oe in batch['original_ending']]
-
-        # 1. Differentiable Forward Pass (for both tracks)
-        expected_embeddings = self.forward(
-            input_ids=input_ids,
-            attention_mask=attention_mask
-        )
-
-        # 2. DTO Loss (same as training)
-        dto_loss = self.dto_loss_embeds(expected_embeddings, edited_endings)
-
-        # 3. Embedding-based Metrics
-        embed_edited = self.metrics_evaluator.calculate_score_embeds(
-            expected_embeddings, edited_endings
-        ).mean()
-
-        # 4. Text Generation
-        with torch.no_grad():
-            # Generate hard tokens
-            generated_tokens = self.model.generate(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                max_length=CONFIG["max_gen_length"],
-                num_beams=4, # Better quality than greedy
-                early_stopping=True  # For generation only
+        with torch.no_grad():  # CRITICAL - no gradients during validation
+            # Forward pass
+            expected_embeddings = self.forward(
+                input_ids=batch['input_ids'],
+                attention_mask=batch['attention_mask']
             )
-            generated_texts = self.tokenizer.batch_decode(
-                generated_tokens,
-                skip_special_tokens=True
+            
+            print(f"Validation mode - expected_embeddings requires_grad: {expected_embeddings.requires_grad}")
+
+            # Add validation=True flag
+            dto_loss = self.dto_loss_embeds(
+                expected_embeddings, 
+                batch['edited_ending'],
+                validation=True
             )
-
-        # 5. Text-based Metrics
-        text_metrics = self.metrics_evaluator.calculate_bart_similarity(
-            generated_texts=generated_texts,
-            edited_endings=edited_endings,
-            counterfactuals=counterfactuals,
-            initials=initials,
-            original_endings=originals
-        )
-
-        # ===== COMBINED LOGGING =====
-        self.log_dict({
-            # Soft track metrics
-            'val/dto_loss': dto_loss,
-            'val/embed_edited': embed_edited,
-            # Hard track metrics
-            **{f'val/text_{k}': v for k, v in text_metrics.items()}
-        }, prog_bar=True)
-
-        # Store details including both soft and hard results
-        for i in range(len(generated_texts)):
-            self.epoch_validation_details.append({
-                'epoch': self.current_epoch,
-                # Hard track info
-                'premise': premises[i],
-                'generated': generated_texts[i],
-                'edited': edited_endings[i],
-                'counterfactual': counterfactuals[i],
-                'original': originals[i],
-                # Soft track info
-                # 'soft_embed_mean': expected_embeddings[i].mean().item(),
-                # 'soft_embed_std': expected_embeddings[i].std().item(),
-                'dto_loss': dto_loss.item(),
-                **{f'metric_{k}': v for k, v in text_metrics.items()}
-            })
-
-        return dto_loss  # <= Return only dto_loss so early stopping can track it
+            
+            # Debug print 2 - check score gradient status
+            print(f"Validation mode - dto_loss requires_grad: {dto_loss.requires_grad}")
+                   
+        # Log metrics
+        self.log('val/dto_loss', dto_loss, prog_bar=True)
+        
+        return dto_loss.item()   # Return scalar value
 
     def test_step(self, batch, batch_idx):
-        # Unpack batch
-        input_ids = batch['input_ids']
-        attention_mask = batch['attention_mask']
-        edited_endings = [str(ee) for ee in batch['edited_ending']]
-        premises = batch['premise']
-        counterfactuals = [str(cf) for cf in batch['counterfactual']]
-        initials = [str(init) for init in batch['initial']]
-        originals = [str(oe) for oe in batch['original_ending']]
-
-        # 1. Differentiable Forward Pass (for both tracks)
-        expected_embeddings = self.forward(
-            input_ids=input_ids,
-            attention_mask=attention_mask
-        )
-
-        # 2. DTO Loss (same as training)
-        dto_loss = self.dto_loss_embeds(expected_embeddings, edited_endings)
-
-        # 3. Embedding-based Metrics
-        embed_edited = self.metrics_evaluator.calculate_score_embeds(
-            expected_embeddings, edited_endings
-        ).mean()
-
-        # 4. Text Generation
-        with torch.no_grad():
+        with torch.no_grad():  # No gradients needed for testing
+            # 1. Generate text
             generated_tokens = self.model.generate(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
+                input_ids=batch['input_ids'],
+                attention_mask=batch['attention_mask'],
                 max_length=CONFIG["max_gen_length"]
             )
-            generated_texts = self.tokenizer.batch_decode(
-                generated_tokens,
-                skip_special_tokens=True
+            generated_texts = self.tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
+
+            # 2. Compute text metrics 
+            text_metrics = self.metrics_evaluator.calculate_bart_similarity(
+                generated_texts=generated_texts,
+                edited_endings=[str(e) for e in batch['edited_ending']],
+                counterfactuals=[str(c) for c in batch['counterfactual']],
+                initials=[str(i) for i in batch['initial']],
+                original_endings=[str(o) for o in batch['original_ending']]
             )
 
-        # 5. Text-based Metrics
-        text_metrics = self.metrics_evaluator.calculate_bart_similarity(
-            generated_texts=generated_texts,
-            edited_endings=edited_endings,
-            counterfactuals=counterfactuals,
-            initials=initials,
-            original_endings=originals
-        )
+            # 3. Log only the metrics you care about
+            self.log_dict(
+                {f'test/{k}': v for k, v in text_metrics.items()},
+                prog_bar=True
+            )
 
-        # ===== COMBINED LOGGING =====
-        self.log_dict({
-            # Soft track metrics
-            # 'test/dto_loss': dto_loss,
-            # 'test/embed_edited': embed_edited,
-            # Hard track metrics
-            **{f'test/text_{k}': v for k, v in text_metrics.items()}
-        }, prog_bar=True)
-
-        # Store details including both soft and hard results
-        for i in range(len(generated_texts)):
-            self.epoch_test_details.append({
-                'epoch': self.current_epoch,
-                # Hard track info
-                'premise': premises[i],
-                'generated': generated_texts[i],
-                'edited': edited_endings[i],
-                'counterfactual': counterfactuals[i],
-                'original': originals[i],
-                # Soft track info
-                # 'soft_embed_mean': expected_embeddings[i].mean().item(),
-                # 'soft_embed_std': expected_embeddings[i].std().item(),
-                # 'dto_loss': dto_loss.item(),
-                **{f'metric_{k}': v for k, v in text_metrics.items()}
-            })
-
-        return None  
+            # 4. Store minimal test details if needed
+            self.epoch_test_details.extend({
+                'generated': gen,
+                'edited': edit,
+                'counterfactual': cf,
+                'original': orig
+            } for gen, edit, cf, orig in zip(
+                generated_texts,
+                batch['edited_ending'],
+                batch['counterfactual'],
+                batch['original_ending']
+            ))
+        return None
 
     def on_validation_epoch_end(self):
         """
@@ -546,3 +486,5 @@ class BartFineTuner(pl.LightningModule):
             'max_prob': max_prob,
             'min_prob': min_prob
         }
+    
+  

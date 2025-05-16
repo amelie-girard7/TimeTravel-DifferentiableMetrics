@@ -78,42 +78,71 @@ class MetricsEvaluator:
         
         return results
 
-    def calculate_score_embeds(self, inputs_embeds, references, batch_size=CONFIG["batch_size"]):
+    def calculate_score_embeds(self, inputs_embeds, references, batch_size=CONFIG["batch_size"], validation=False):
         """
-        Computes BARTScore similarity by passing expected embeddings directly as inputs.
-
+        Computes BARTScore similarity with explicit gradient control and debugging.
+        
         Args:
-            inputs_embeds (torch.Tensor): Expected embeddings from the rewriting model.
-            references (list of str): Reference texts (edited endings) tokenized as usual.
-            batch_size (int): Batch size for scoring (defaults to CONFIG["batch_size"]).
-
+            inputs_embeds: Expected embeddings from main model [batch, seq_len, hidden_dim]
+            references: List of reference text strings
+            batch_size: Batch size for scoring
+            validation: Boolean flag indicating validation mode
+            
         Returns:
-            scores_tensor (torch.Tensor): A tensor of BARTScore values.
+            Tensor of BARTScore values with proper gradient handling
         """
-
-        print("\n=== SCORE EMBEDS DEBUGGING ===")
-        print(f"Input embeddings device: {inputs_embeds.device}")
-        print(f"BART scorer device: {self.bart_scorer.device}")
-        print(f"Input embeddings shape: {inputs_embeds.shape}")
-        print(f"Input embeddings stats - mean: {inputs_embeds.mean().item():.4f}, std: {inputs_embeds.std().item():.4f}")
-        print(f"References count: {len(references)}")
-        print(f"Sample reference: {references[0][:50]}...")
-
-        # Verify BART scorer model is in eval mode
-        print(f"BART scorer model training mode: {self.bart_scorer.model.training}")
-
-        # Call the new score_embeds method from the BART scorer.
-        scores = self.bart_scorer.score_embeds(inputs_embeds, references, batch_size=batch_size)
-
-        print(f"Raw scores: {scores[:5]}")
-        print(f"Scores dtype: {type(scores[0])}")
-        print(f"Scores stats - min: {min(scores):.4f}, max: {max(scores):.4f}, mean: {sum(scores)/len(scores):.4f}")
-
-        # Convert scores to a tensor on the device specified in the config.
-        scorer_device = CONFIG.get("scorer_device", "cuda" if torch.cuda.is_available() else "cpu")
-        scores_tensor = torch.tensor(scores, dtype=torch.float32, device=scorer_device)
-
-        print(f"Scores tensor stats - mean: {scores_tensor.mean().item():.4f}, std: {scores_tensor.std().item():.4f}")
-        print(f"Scores tensor device: {scores_tensor.device}")
-
-        return scores_tensor
+        # ===== 1. Mode Identification =====
+        mode = "VALIDATION" if validation else "TRAINING"
+        print(f"\n=== BARTScore Calculation ({mode}) ===")
+        
+        # ===== 2. Input Verification =====
+        print("[Input Verification]")
+        print(f"Embeddings device: {inputs_embeds.device}")
+        print(f"Embeddings shape: {inputs_embeds.shape}")
+        print(f"Embeddings requires_grad: {inputs_embeds.requires_grad}")
+        print(f"Embeddings stats - μ: {inputs_embeds.mean().item():.4f} σ: {inputs_embeds.std().item():.4f}")
+        print(f"Reference count: {len(references)}")
+        print(f"Sample reference: {references[0][:100]}{'...' if len(references[0]) > 100 else ''}")
+        
+        # ===== 3. Scorer Status =====
+        print("\n[Scorer Status]")
+        print(f"Scorer device: {self.bart_scorer.device}")
+        print(f"Scorer training mode: {self.bart_scorer.model.training}")
+        print(f"Scorer parameters frozen: {all(not p.requires_grad for p in self.bart_scorer.parameters())}")
+        
+        # ===== 4. Gradient-Controlled Scoring =====
+        if validation:
+            with torch.no_grad():
+                print("\n[Validation Mode] Gradient context: torch.no_grad()")
+                scores = self.bart_scorer.score_embeds(
+                    inputs_embeds, 
+                    references, 
+                    batch_size,
+                    validation=True
+                )
+                print(f"Output scores requires_grad: {scores.requires_grad}")
+        else:
+            print("\n[Training Mode] Gradient context: enabled")
+            scores = self.bart_scorer.score_embeds(
+                inputs_embeds,
+                references,
+                batch_size,
+                validation=False
+            )
+            print(f"Output scores requires_grad: {scores.requires_grad}")
+        
+        # ===== 5. Output Verification =====
+        print("\n[Output Verification]")
+        print(f"Scores shape: {scores.shape}")
+        print(f"Scores dtype: {scores.dtype}")
+        print(f"Scores stats - μ: {scores.mean().item():.4f} σ: {scores.std().item():.4f}")
+        print(f"Scores range: [{scores.min().item():.4f}, {scores.max().item():.4f}]")
+        
+        # ===== 6. Gradient Flow Check =====
+        if not validation and not scores.requires_grad:
+            print("\n!! WARNING: Training mode but scores don't require gradient !!")
+            print("Possible gradient flow interruption at:")
+            print("- BART scorer forward pass")
+            print("- Score aggregation")
+        
+        return scores
