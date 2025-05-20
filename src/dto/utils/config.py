@@ -47,7 +47,7 @@ CONFIG = {
 
     # **Gumbel-Softmax Settings**
     "use_gumbel": True,                      # Enable/disable Gumbel-Softmax
-    "gumbel_temperature": 1.5,   # Fixed temperature (higher than 1.0 for better gradients)
+    "gumbel_temperature": 0.5,   # Fixed temperature (higher than 1.0 for better gradients) 1, 1.5
     "gumbel_hard": False, 
 
     # Annealing Settings (Disabled for initial experiments)
