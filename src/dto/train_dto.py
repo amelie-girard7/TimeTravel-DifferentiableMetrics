@@ -1,42 +1,128 @@
 import sys
 import os
+import re
+import io
 import datetime
 import logging
-import torch
-from transformers import BartForConditionalGeneration, BartTokenizer
 from pathlib import Path
+from typing import Optional, Dict, Tuple
+
+# Third-party imports
+import torch
+import pandas as pd
+from transformers import BartForConditionalGeneration, BartTokenizer
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
+
+# Local imports
 from src.dto.models.model import BartFineTuner
 from src.dto.data_loader import create_dataloaders
 from src.dto.utils.metrics import MetricsEvaluator
 from src.dto.utils.config import CONFIG
-import pandas as pd
-import re
 
 
 # Add project root to Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+# Initialize device right at the start
+DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # Force using GPU 0
+
 # Set up logging configuration
-logging.basicConfig(level=logging.INFO)
+#logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Ensure safe loading of checkpoints in PyTorch 2.6+
 torch.serialization.add_safe_globals([os.path, re, datetime])
-# torch.serialization.add_safe_globals([pathlib.Path, os.path, re, datetime])
 
-def validate_config():
-    """Validate critical configuration parameters"""
-    required_keys = ['model_name', 'data_dir', 'batch_size', 'learning_rate',
-                    'dto_epochs', 'dto_checkpoint_path']
-    missing = [k for k in required_keys if k not in CONFIG]
-    if missing:
-        raise ValueError(f"Missing required config keys: {missing}")
 
-    if not Path(CONFIG["dto_checkpoint_path"]).exists():
-        raise FileNotFoundError(f"Checkpoint not found: {CONFIG['dto_checkpoint_path']}")
+class DualOutputLogger(io.TextIOBase):
+    """Enhanced logger that captures all output and writes to both file and console"""
+    def __init__(self, filename: Path):
+        self.log_file = open(filename, 'a', encoding='utf-8')
+        self.console = sys.stdout
+        self._encoding = 'utf-8'  # Store encoding as protected attribute
+        
+    @property
+    def encoding(self):
+        """Required attribute for TextIOBase compatibility"""
+        return self._encoding
+        
+    @property
+    def errors(self):
+        """Required attribute for TextIOBase compatibility"""
+        return 'strict'
+        
+    def write(self, message: str) -> None:
+        self.log_file.write(message)
+        self.console.write(message)
+        
+    def flush(self) -> None:
+        self.log_file.flush()
+        self.console.flush()
+        
+    def close(self) -> None:
+        self.log_file.close()
+        self.console.flush()
+        
+    def isatty(self) -> bool:
+        """Required attribute for TextIOBase compatibility"""
+        return False
+
+def setup_logging(model_dir: Path) -> Tuple[logging.Logger, Path]:
+    """Configure comprehensive logging system
+    
+    Args:
+        model_dir: Directory where log files should be stored
+        
+    Returns:
+        Tuple of (logger, log_file_path)
+    """
+    try:
+        # Create main log file path
+        log_file = model_dir / "training.log"
+        
+        # Clear existing handlers to avoid duplicate logs
+        logging.root.handlers = []
+        
+        # Create formatter with timestamp and module info
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        
+        # File handler
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setFormatter(formatter)
+        file_handler.setLevel(logging.INFO)
+        
+        # Console handler
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
+        console_handler.setLevel(logging.INFO)
+        
+        # Configure root logger
+        logging.basicConfig(
+            level=logging.INFO,
+            handlers=[file_handler, console_handler],
+            force=True  # Override any existing handlers
+        )
+        
+        # Get logger instance for this module
+        logger = logging.getLogger(__name__)
+        
+        # Redirect stdout/stderr to capture all output
+        output_log = model_dir / "full_output.log"
+        sys.stdout = sys.stderr = DualOutputLogger(output_log)
+        logger.info(f"All output being logged to: {output_log}")
+        
+        return logger, log_file
+        
+    except Exception as e:
+        print(f"Failed to setup logging: {str(e)}")  # Fallback to basic output
+        logging.basicConfig(level=logging.INFO)
+        return logging.getLogger(__name__), None
 
 def setup_model(model_dir, file_label="", checkpoint_path=None):
     """Initialize model with enhanced safety checks"""
@@ -47,9 +133,6 @@ def setup_model(model_dir, file_label="", checkpoint_path=None):
         if not Path(checkpoint_path).exists():
             raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
-        # Add safe globals for PyTorch 2.6+
-        # import pathlib
-        # torch.serialization.add_safe_globals([pathlib.Path, os.path, re, datetime])
 
         # Load checkpoint with validation
         checkpoint = torch.load(
@@ -116,27 +199,28 @@ def setup_trainer(max_epochs, model_dir):
                 save_top_k=1,
                 filename='dto-best-{epoch}-{val/dto_loss:.2f}', 
                 auto_insert_metric_name=False,
-                save_last=True
+                #save_last=True
             ),
             EarlyStopping(
                 monitor='val/dto_loss',
-                patience=10,
+                #min_delta=0.00,
+                patience=2, # 3 epochs * 10 validations per epoch
                 mode='min',
-                verbose=True,
-                check_finite=True
+                verbose=True
+                #check_finite=True # commented out 20/05 for testing
             )
         ]
 
         return Trainer(
             max_epochs=max_epochs,
-            accelerator='auto',
+            accelerator='gpu',
             devices=1,
             logger=wandb_logger,
             callbacks=callbacks,
-            #val_check_interval=0.25,  # Validate 4 times per epoch
-            val_check_interval=1, 
+            #val_check_interval=0.25,  # change it to 0.1 Validate every 10% of an epoch (10x per epoch) 
+            check_val_every_n_epoch=1,  # Validate only at end of each epoch
             log_every_n_steps=10,
-            deterministic=True,
+            #deterministic=True, # commented out 20/05 for testing
             enable_progress_bar=True,
             enable_model_summary=True,
             default_root_dir=model_dir
@@ -148,23 +232,22 @@ def setup_trainer(max_epochs, model_dir):
 
 def main():
     try:
-        os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+        # os.environ['CUDA_VISIBLE_DEVICES'] = '0'
         # Initial validation
-        validate_config()
+        # validate_config()
         
         # Setup directories and logging
         timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         model_dir = Path(CONFIG["models_dir"]) / f"dto_{timestamp}"
         model_dir.mkdir(parents=True, exist_ok=True)
         
-        # Configure logging
-        log_file = model_dir / "training.log"
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-        logger.addHandler(file_handler)
-        
+    
+        # Initialize comprehensive logging
+        logger, _ = setup_logging(model_dir)
         logger.info(f"Starting training session in {model_dir}")
-        logger.info(f"Configuration:\n{CONFIG}")
+        logger.info(f"System device: {DEVICE}")
+        logger.info("Configuration:\n%s", "\n".join(f"{k}: {v}" for k, v in CONFIG.items()))
+        
 
         # Initialize components
         tokenizer = BartTokenizer.from_pretrained(
@@ -241,12 +324,15 @@ def main():
         logger.exception("Training failed:")
         sys.exit(1)
     finally:
-        # Cleanup
-        for handler in logger.handlers[:]:
+        # Cleanup logging handlers
+        handlers = logging.getLogger().handlers[:]
+        for handler in handlers:
             handler.close()
-            logger.removeHandler(handler)
-        sys.stdout.close()
-        sys.stderr.close()
+            logging.getLogger().removeHandler(handler)
+        
+        # Restore stdout/stderr
+        sys.stdout = sys.__stdout__
+        sys.stderr = sys.__stderr__
 
 if __name__ == '__main__':
     main()
