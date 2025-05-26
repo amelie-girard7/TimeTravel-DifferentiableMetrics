@@ -25,13 +25,13 @@ CONFIG = {
     "model_name": os.getenv('MODEL_NAME', "facebook/bart-large-cnn"),  # Base model
     "batch_size": int(os.getenv('BATCH_SIZE', 4)),   # Training batch size
     "num_workers": int(os.getenv('NUM_WORKERS', 3)), # Dataloader workers
-    "learning_rate": float(os.getenv('LEARNING_RATE', 3e-5)),  # Optimizer learning rate
+    "learning_rate": float(os.getenv('LEARNING_RATE', 1e-5)),  # Reduced from 3e-5 for more stable training
 
     # **Training Parameters**
     "max_length": 512,      # Max token length for input sequences
     "max_gen_length": 250,  # Max token length for generated text
     "shuffle": True,        # Shuffle dataset during training
-    "dto_epochs": 2,  # Number of DTO training epochs
+    "dto_epochs": 1,  # Number of DTO training epochs
 
     # **MLE Checkpoint for DTO Training**
     "dto_checkpoint_path":"/data/agirard/Projects/TimeTravel-DifferentiableMetrics/models/mle_2025-03-31-19/mle_checkpoint_epoch-epoch=00-step-step=004180-val_loss-validation_mle_loss=0.91.ckpt", #MLE6
@@ -47,7 +47,7 @@ CONFIG = {
 
     # **Gumbel-Softmax Settings**
     "use_gumbel": True,                      # Enable/disable Gumbel-Softmax
-    "gumbel_temperature": 0.5,   # Fixed temperature (higher than 1.0 for better gradients) 1, 1.5
+    "gumbel_temperature": 1,   # Fixed temperature (higher than 1.0 for better gradients) 1, 1.5
     "gumbel_hard": False, 
 
     # Annealing Settings (Disabled for initial experiments)
@@ -57,7 +57,7 @@ CONFIG = {
     "gumbel_log_freq": 100,       # Log frequency if enabled later
 
     # **New Optimization Parameters**
-    "gradient_clip_val": 1.0,
+    "gradient_clip_val": 0.5,
     "accumulate_grad_batches": 1,  # No accumulation for now
 
 }
