@@ -196,18 +196,19 @@ def setup_trainer(max_epochs, model_dir):
                 dirpath=model_dir,
                 monitor='val/dto_loss',
                 mode='min',
-                save_top_k=1,
+                save_top_k=1,  # Keep top 3 checkpoints instead of just 1
                 filename='dto-best-{epoch}-{val/dto_loss:.2f}', 
                 auto_insert_metric_name=False,
                 #save_last=True
             ),
             EarlyStopping(
                 monitor='val/dto_loss',
-                #min_delta=0.00,
-                patience=2, # 3 epochs * 10 validations per epoch
+                min_delta=0.00, 
+                patience=30, 
                 mode='min',
-                verbose=True
-                #check_finite=True # commented out 20/05 for testing
+                verbose=True,
+                check_finite=True,  # Re-enabled for safety
+                # stopping_threshold=0.1 
             )
         ]
 
@@ -217,9 +218,9 @@ def setup_trainer(max_epochs, model_dir):
             devices=1,
             logger=wandb_logger,
             callbacks=callbacks,
-            #val_check_interval=0.25,  # change it to 0.1 Validate every 10% of an epoch (10x per epoch) 
-            check_val_every_n_epoch=1,  # Validate only at end of each epoch
-            log_every_n_steps=10,
+            val_check_interval=0.1,  # change it to 0.1 Validate every 10% of an epoch (10x per epoch) 
+            #check_val_every_n_epoch=1,  # Validate only at end of each epoch
+            log_every_n_steps=20,
             #deterministic=True, # commented out 20/05 for testing
             enable_progress_bar=True,
             enable_model_summary=True,
