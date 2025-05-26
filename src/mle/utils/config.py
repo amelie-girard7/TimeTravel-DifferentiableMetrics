@@ -39,7 +39,7 @@ CONFIG = {
     "model_name": os.getenv('MODEL_NAME', "facebook/bart-large-cnn"),  # Use BART model instead of T5
     "batch_size": int(os.getenv('BATCH_SIZE', 4)),  # Number of samples per batch
     "num_workers": int(os.getenv('NUM_WORKERS', 3)),  # Number of workers for data loading
-    "learning_rate": float(os.getenv('LEARNING_RATE', 2e-5)),  # Learning rate for the optimizer
+    "learning_rate": float(os.getenv('LEARNING_RATE', 1e-5)),  # Learning rate for the optimizer
 
     # Preprocessing and generation parameters
     "max_length": 512,  # Maximum length for input data
@@ -50,9 +50,7 @@ CONFIG = {
     "mle_enabled": True,  # Enable MLE training (set to True)
 
 
-
-    # MLE Training Configuration - These may not be required
-    "mle_from_checkpoint": True,  # Resume MLE training from checkpoint
+    "mle_from_checkpoint": False,  # Resume MLE training from checkpoint
     "mle_checkpoint_path": None, # Train MLE from scratch
     #"mle_checkpoint_path": "/data/agirard/Projects/TimeTravel-DifferentiableMetrics/models/mle_2025-03-31-09/mle_checkpoint_epoch-epoch=00-step-step=004180-val_loss-validation_mle_loss=0.92.ckpt", #MLE1
     #"mle_checkpoint_path": "/data/agirard/Projects/TimeTravel-DifferentiableMetrics/models/mle_2025-03-31-14/mle_checkpoint_epoch-epoch=00-step-step=000418-val_loss-validation_mle_loss=0.95.ckpt", #MLE2   
