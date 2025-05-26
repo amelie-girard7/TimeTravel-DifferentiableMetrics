@@ -89,8 +89,7 @@ def main():
     """
     # List of repository directories to process.
     repo_paths = [
-        # '/data/agirard/Projects/TimeTravel-PolicyGradientRL/models/mle_2025-03-18-13', # MLE2
-        '/data/agirard/Projects/TimeTravel-DifferentiableMetrics/models/mle_2025-03-31-09', # MLE1
+        '/data/agirard/Projects/TimeTravel-DifferentiableMetrics/models/mle_2025-03-31-19', # MLE6
     ]
 
     # Process validation files
