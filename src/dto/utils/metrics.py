@@ -77,72 +77,36 @@ class MetricsEvaluator:
                 results[f"{label}_score"] = float('nan')
         
         return results
+    
 
-    # def calculate_score_embeds(self, inputs_embeds, references, batch_size=CONFIG["batch_size"], validation=False):
-    #     """
-    #     Computes BARTScore similarity with explicit gradient control and debugging.
+    def calculate_score_embeds(self, expected_embeds, endings, validation=False, batch_size=None):
+        """
+        Helper function to calculate BARTScore with proper gradient handling
         
-    #     Args:
-    #         inputs_embeds: Expected embeddings from main model [batch, seq_len, hidden_dim]
-    #         references: List of reference text strings
-    #         batch_size: Batch size for scoring
-    #         validation: Boolean flag indicating validation mode
+        Args:
+            expected_embeds: Tensor of expected embeddings
+            endings: List of ending texts to score
+            validation: Boolean indicating if in validation mode
+            batch_size: Batch size for scoring (from CONFIG)
             
-    #     Returns:
-    #         Tensor of BARTScore values with proper gradient handling
-    #     """
-    #     # ===== 1. Mode Identification =====
-    #     mode = "VALIDATION" if validation else "TRAINING"
-    #     print(f"\n=== BARTScore Calculation ({mode}) ===")
-        
-    #     # ===== 2. Input Verification =====
-    #     print("[Input Verification]")
-    #     print(f"Embeddings device: {inputs_embeds.device}")
-    #     print(f"Embeddings shape: {inputs_embeds.shape}")
-    #     print(f"Embeddings requires_grad: {inputs_embeds.requires_grad}")
-    #     print(f"Embeddings stats - μ: {inputs_embeds.mean().item():.4f} σ: {inputs_embeds.std().item():.4f}")
-    #     print(f"Reference count: {len(references)}")
-    #     print(f"Sample reference: {references[0][:100]}{'...' if len(references[0]) > 100 else ''}")
-        
-    #     # ===== 3. Scorer Status =====
-    #     print("\n[Scorer Status]")
-    #     print(f"Scorer device: {self.bart_scorer.device}")
-    #     print(f"Scorer training mode: {self.bart_scorer.model.training}")
-    #     print(f"Scorer parameters frozen: {all(not p.requires_grad for p in self.bart_scorer.parameters())}")
-        
-    #     # ===== 4. Gradient-Controlled Scoring =====
-    #     if validation:
-    #         with torch.no_grad():
-    #             print("\n[Validation Mode] Gradient context: torch.no_grad()")
-    #             scores = self.bart_scorer.score_embeds(
-    #                 inputs_embeds, 
-    #                 references, 
-    #                 batch_size,
-    #                 validation=True
-    #             )
-    #             print(f"Output scores requires_grad: {scores.requires_grad}")
-    #     else:
-    #         print("\n[Training Mode] Gradient context: enabled")
-    #         scores = self.bart_scorer.score_embeds(
-    #             inputs_embeds,
-    #             references,
-    #             batch_size,
-    #             validation=False
-    #         )
-    #         print(f"Output scores requires_grad: {scores.requires_grad}")
-        
-    #     # ===== 5. Output Verification =====
-    #     print("\n[Output Verification]")
-    #     print(f"Scores shape: {scores.shape}")
-    #     print(f"Scores dtype: {scores.dtype}")
-    #     print(f"Scores stats - μ: {scores.mean().item():.4f} σ: {scores.std().item():.4f}")
-    #     print(f"Scores range: [{scores.min().item():.4f}, {scores.max().item():.4f}]")
-        
-    #     # ===== 6. Gradient Flow Check =====
-    #     if not validation and not scores.requires_grad:
-    #         print("\n!! WARNING: Training mode but scores don't require gradient !!")
-    #         print("Possible gradient flow interruption at:")
-    #         print("- BART scorer forward pass")
-    #         print("- Score aggregation")
-        
-    #     return scores
+        Returns:
+            Tensor of scores
+        """
+        if validation:
+            with torch.no_grad():
+                return self.bart_scorer.score_embeds(
+                    expected_embeds,
+                    endings,
+                    batch_size=batch_size,
+                    validation=True
+                )
+        else:
+            if not expected_embeds.requires_grad:
+                expected_embeds = expected_embeds.requires_grad_(True)
+            return self.bart_scorer.score_embeds(
+                expected_embeds,
+                endings,
+                batch_size=batch_size,
+                validation=False
+            )
+  

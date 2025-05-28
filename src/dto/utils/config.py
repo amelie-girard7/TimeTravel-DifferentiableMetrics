@@ -17,21 +17,21 @@ CONFIG = {
     "dataset_type": "TimeTravel",   # Options: "ART", "TimeTravel", "AblatedTimeTravel"
 
     # **Dataset Files**
-    "train_file": "train_supervised_small_sample.json",
-    "dev_file": "dev_data_sample.json",
-    "test_file": "test_data_sample.json",
+    "train_file": "train_supervised_small.json",
+    "dev_file": "dev_data.json",
+    "test_file": "test_data.json",
 
     # **Model & Training Settings**
     "model_name": os.getenv('MODEL_NAME', "facebook/bart-large-cnn"),  # Base model
-    "batch_size": int(os.getenv('BATCH_SIZE', 4)),   # Training batch size
+    "batch_size": int(os.getenv('BATCH_SIZE', 2)),   # Training batch size
     "num_workers": int(os.getenv('NUM_WORKERS', 3)), # Dataloader workers
-    "learning_rate": float(os.getenv('LEARNING_RATE', 1e-5)),  # Reduced from 3e-5 for more stable training
+    "learning_rate": float(os.getenv('LEARNING_RATE', 1e-8)),  # Reduced from 1e-4 for more stable training
 
     # **Training Parameters**
     "max_length": 512,      # Max token length for input sequences
     "max_gen_length": 250,  # Max token length for generated text
     "shuffle": True,        # Shuffle dataset during training
-    "dto_epochs": 1,  # Number of DTO training epochs
+    "dto_epochs": 5,  # Number of DTO training epochs
 
     # **MLE Checkpoint for DTO Training**
     "dto_checkpoint_path":"/data/agirard/Projects/TimeTravel-DifferentiableMetrics/models/mle_2025-03-31-19/mle_checkpoint_epoch-epoch=00-step-step=004180-val_loss-validation_mle_loss=0.91.ckpt", #MLE6
@@ -57,8 +57,8 @@ CONFIG = {
     "gumbel_log_freq": 100,       # Log frequency if enabled later
 
     # **New Optimization Parameters**
-    "gradient_clip_val": 0.5,
-    "accumulate_grad_batches": 1,  # No accumulation for now
+    # "gradient_clip_val": 0.5,
+    # "accumulate_grad_batches": 1,  # No accumulation for now
 
 }
 
