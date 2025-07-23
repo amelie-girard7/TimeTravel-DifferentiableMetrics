@@ -2,9 +2,9 @@ import sys
 import pandas as pd
 from transformers import T5Tokenizer
 from pytorch_lightning import Trainer
-from src.dto.models.model import BartFineTuner
-from src.dto.data_loader import create_dataloaders
-from src.dto.utils.config import CONFIG
+from src.cpo.models.model import BartFineTuner
+from src.cpo.data_loader import create_dataloaders
+from src.cpo.utils.config import CONFIG
 from pathlib import Path
 from datetime import datetime
 
@@ -52,7 +52,6 @@ def main(checkpoint_path):
 
     test_details_file = model.model_dir / f"test_details_pg_{timestamp}.csv"
     test_details_df.to_csv(test_details_file, index=False)
-
 
 
 if __name__ == '__main__':

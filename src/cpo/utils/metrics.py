@@ -3,7 +3,7 @@ import torch
 from sacrebleu.metrics import BLEU
 from rouge import Rouge
 from bert_score import BERTScorer
-from src.dto.utils.config import CONFIG
+from src.cpo.utils.config import CONFIG
 from src.BARTScore_metric.bart_score import BARTScorer
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ class MetricsEvaluator:
         # Initialize BLEU scorer if configured to use BLEU
         self.sacre_bleu = BLEU() if CONFIG.get("use_bleu", False) else None
 
-        # Initialize BARTScorer (used for DTO loss and evaluation)
+        # Initialize BARTScorer (used for CPO loss and evaluation)
         self.bart_scorer = BARTScorer(
             device=CONFIG.get("scorer_device", "cuda" if torch.cuda.is_available() else "cpu"),
             checkpoint=CONFIG.get("bart_scorer_checkpoint", "facebook/bart-large-cnn")
@@ -42,6 +42,7 @@ class MetricsEvaluator:
         # Freeze BART scorer so it does not update during training
         for param in self.bart_scorer.model.parameters():
             param.requires_grad = False
+        print("MetricsEvaluator initialized with BARTScore")
 
     def calculate_score(self, generated_texts, references):
         """
@@ -57,6 +58,7 @@ class MetricsEvaluator:
         if self.bart_scorer is None:
             raise ValueError("BARTScore is not initialized. Set 'use_bart' to True in CONFIG.")
 
+        print("Calculating BARTScore...")
         # Ensure inputs are lists of strings
         generated_texts = [str(gt) for gt in generated_texts]
         references = [str(ref) for ref in references]
@@ -65,6 +67,8 @@ class MetricsEvaluator:
         scores = self.bart_scorer.score(generated_texts, references)
         # Convert scores to a tensor for logging
         scores_tensor = torch.tensor(scores, dtype=torch.float32, device=CONFIG.get("scorer_device", "cpu"))
+
+        print(f"BARTScore Tensor: {scores_tensor}")
         return scores_tensor
 
     def calculate_bart_similarity(self, generated_texts, edited_endings, counterfactuals, original_endings):
@@ -73,18 +77,11 @@ class MetricsEvaluator:
             ('bart/pred_edited', generated_texts, edited_endings),
             ('bart/pred_cf', generated_texts, counterfactuals),
             #('bart/pred_initial', generated_texts, initials),
-            # ('bart/pred_original', generated_texts, original_endings),
+            ('bart/pred_original', generated_texts, original_endings),
             ('bart/edited_cf', edited_endings, counterfactuals),
             #('bart/edited_initial', edited_endings, initials),
-            # ('bart/edited_original', edited_endings, original_endings),
+            ('bart/edited_original', edited_endings, original_endings),
         ]
-
-                    # Only add original ending comparisons if we have non-empty strings
-        if original_endings and any(oe.strip() for oe in original_endings):
-            comparisons.extend([
-                ('rouge_prediction_original', generated_texts, original_endings),
-                ('rouge_edited_ending_original', edited_endings, original_endings)
-            ])
         
         results = {}
         for label, src, tgt in comparisons:
@@ -101,20 +98,15 @@ class MetricsEvaluator:
         """
         Calculates and logs ROUGE scores for various comparisons between generated texts and references.
         """
+        # print("Calculating ROUGE scores...")
 
         all_comparisons = [
             ('rouge_prediction_edited', generated_texts, edited_endings),
             ('rouge_prediction_cf', generated_texts, counterfactuals),
-            # ('rouge_prediction_original', generated_texts, original_endings),
+            ('rouge_prediction_original', generated_texts, original_endings),
             ('rouge_edited_ending_cf', edited_endings, counterfactuals),
-            # ('rouge_edited_ending_original', edited_endings, original_endings),
+            ('rouge_edited_ending_original', edited_endings, original_endings),
         ]
-            # Only add original ending comparisons if we have non-empty strings
-        if original_endings and any(oe.strip() for oe in original_endings):
-            all_comparisons.extend([
-                ('rouge_prediction_original', generated_texts, original_endings),
-                ('rouge_edited_ending_original', edited_endings, original_endings)
-            ])
 
         rouge_scores = {}
         for label, hypotheses, references in all_comparisons:
@@ -134,19 +126,15 @@ class MetricsEvaluator:
         """
         Calculates and logs BERT similarity F1 scores for various comparisons of generated texts and references.
         """
+        # print("Calculating BERT similarity F1 scores...")
 
         all_comparisons = [
             ('bert_prediction_edited', generated_texts, edited_endings),
             ('bert_prediction_cf', generated_texts, counterfactuals),
-            # ('bert_prediction_original', generated_texts, original_endings),
+            ('bert_prediction_original', generated_texts, original_endings),
             ('bert_edited_ending_cf', edited_endings, counterfactuals),
-            # ('bert_edited_ending_original', edited_endings, original_endings),
+            ('bert_edited_ending_original', edited_endings, original_endings),
         ]
-        if original_endings and any(oe.strip() for oe in original_endings):
-            all_comparisons.extend([
-                ('rouge_prediction_original', generated_texts, original_endings),
-                ('rouge_edited_ending_original', edited_endings, original_endings)
-            ])
 
         bert_scores = {}
         for label, texts_a, texts_b in all_comparisons:
@@ -164,6 +152,8 @@ class MetricsEvaluator:
 
     def calculate_bleu_similarity(self, generated_texts, edited_endings, counterfactuals, original_endings):
 
+        # print("Calculating BLEU scores...")
+
         # Prepare references for BLEU score calculation
         # edited_endings_refs = [[ending] for ending in all_edited_endings] if all_edited_endings else None
         # counterfactuals_refs = [[cf] for cf in all_counterfactuals]
@@ -179,15 +169,10 @@ class MetricsEvaluator:
         all_comparisons = [
             ('bleu_prediction_edited', generated_texts, edited_endings_refs),
             ('bleu_prediction_cf', generated_texts, counterfactuals_refs),
-            # ('bleu_prediction_original', generated_texts, original_endings_refs),
+            ('bleu_prediction_original', generated_texts, original_endings_refs),
             ('bleu_edited_ending_cf', edited_endings, counterfactuals_refs),
-            # ('bleu_edited_ending_original', edited_endings, original_endings_refs),
+            ('bleu_edited_ending_original', edited_endings, original_endings_refs),
         ]
-        if original_endings and any(oe.strip() for oe in original_endings):
-            all_comparisons.extend([
-                ('rouge_prediction_original', generated_texts, original_endings),
-                ('rouge_edited_ending_original', edited_endings, original_endings)
-            ])
 
         # Dictionary to store BLEU scores for each comparison
         bleu_scores = {}
@@ -204,6 +189,7 @@ class MetricsEvaluator:
                     bleu_scores[label] = 'N/A'
 
         return bleu_scores
+
 
     def calculate_score_embeds(self, expected_embeds, endings, validation=False, batch_size=None):
         """

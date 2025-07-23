@@ -1,4 +1,3 @@
-# /data/agirard/Projects/TimeTravel-DifferentiableMetrics/src/mle/models/model.py
 import csv
 import logging
 import os
@@ -164,25 +163,10 @@ class BartFineTuner(pl.LightningModule):
         """
         Finalizes and saves validation results at the end of each epoch.
         """
-        # if self.epoch_validation_details:
-        #     self.log_to_csv(self.val_csv_file_path, self.epoch_validation_details, epoch=self.current_epoch)
-        #
-        # if self.epoch_scores:
-        #     overall_val_score = torch.tensor(self.epoch_scores).mean().item()
-        #     self.log("validation_overall_score", overall_val_score, prog_bar=True, logger=True)
-        #
-        # self.epoch_validation_details.clear()
-        # self.epoch_scores.clear()
-
     def on_test_epoch_end(self):
         """
         Finalizes and saves test results at the end of the test epoch.
         """
-        # if self.epoch_test_details:
-        #     self.log_to_csv(self.test_csv_file_path, self.epoch_test_details, epoch=self.current_epoch)
-        #
-        # self.epoch_test_details.clear()
-        # self.epoch_test_scores.clear()
 
     def log_to_csv(self, csv_file_path, details, epoch=None):
         """

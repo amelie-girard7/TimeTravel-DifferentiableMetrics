@@ -99,8 +99,4 @@ Metrics will appear in the model directory as CSVs.
 
 MIT License — see [LICENSE](LICENSE) for details.
 
-## Contact
-
-For questions or issues, please open an issue on GitHub or email `amelie.girard@student.uts.edu.au`.
-
 

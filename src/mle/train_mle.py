@@ -1,5 +1,3 @@
-# /data/agirard/Projects/TimeTravel-DifferentiableMetrics/src/mle/main_mle.py
-
 import sys
 import os
 import datetime
@@ -107,11 +105,11 @@ def main():
 
     # Early stopping callback to stop training when the validation loss stops improving
     early_stop_callback = EarlyStopping(
-        monitor='validation_mle_loss',  # Monitor the validation loss metric
-        min_delta=0.00,  # Minimum change in the monitored metric to qualify as an improvement
-        patience=2,  # Number of epochs to wait without improvement before stopping training
-        verbose=True,  # Print messages when early stopping is triggered
-        mode='min'  # We expect the monitored metric to decrease; training stops when it stops decreasing
+        monitor='validation_mle_loss',  
+        min_delta=0.00, 
+        patience=2,  
+        verbose=True, 
+        mode='min' 
     )
 
     # trainer = setup_trainer(CONFIG["mle_epochs"], mle_checkpoint_callback, wandb_logger)

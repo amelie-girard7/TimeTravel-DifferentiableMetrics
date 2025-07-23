@@ -1,4 +1,3 @@
-# /data/agirard/Projects/TimeTravel-DifferentiableMetrics/src/dto/data_loader.py
 import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 from pathlib import Path
@@ -19,7 +18,6 @@ class CustomJSONDataset(Dataset):
             tokenizer (T5Tokenizer): The tokenizer to use for preprocessing.
         """
         dataset_type = CONFIG["dataset_type"]  # Fetch dataset_type directly from CONFIG
-        # print(f"Initializing CustomJSONDataset with dataset_type: {dataset_type}")
         # Attempt to load and preprocess the data from the provided JSON file
         try:
             data = pd.read_json(file_path, lines=True)
@@ -38,7 +36,6 @@ class CustomJSONDataset(Dataset):
             axis=1,
             result_type='expand'
         )
-        # print(f"First few rows of processed data: {self.processed_data.head()}")
 
     def __len__(self):
         """Returns the total number of items in the dataset."""
@@ -71,7 +68,6 @@ def create_dataloaders(data_path, tokenizer, batch_size, num_workers):
         dict: A dictionary of DataLoader objects, keyed by dataset type ('train', 'dev', 'test').
     """
     dataset_type = CONFIG["dataset_type"] # Access dataset_type from CONFIG "ART", "TimeTravel", "AblatedTimeTravel".
-    # print(f"Creating dataloaders for dataset_type: {dataset_type}")  # Debug dataset type
 
     file_names = [
         CONFIG["train_file"],
@@ -82,8 +78,6 @@ def create_dataloaders(data_path, tokenizer, batch_size, num_workers):
     dataloaders = {}
     for file_name in file_names:
         file_path = Path(data_path) / file_name
-        # print(f"Loading file: {file_path} for dataset_type: {dataset_type}")  # Debug file path
-
         # Check if the dataset file exists
         if not file_path.exists():
             raise FileNotFoundError(f"{file_path} does not exist.")

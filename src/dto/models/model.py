@@ -1,4 +1,3 @@
-# /data/agirard/Projects/TimeTravel-DifferentiableMetrics/src/dto/models/model.py
 import csv
 import logging
 import os
@@ -10,6 +9,7 @@ import pytorch_lightning as pl
 from pathlib import Path
 from src.dto.utils.config import CONFIG
 from src.dto.utils.metrics import MetricsEvaluator
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -27,18 +27,12 @@ class BartFineTuner(pl.LightningModule):
 
         # 2. Determine target device
         self.target_device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-        # print(f"\n=== Device Configuration ===")
-        # print(f"Target computation device: {self.target_device}")
 
         # 3. Load main model components
-        # print("\n=== Main Model Loading ===")
-        # print("Loading BART model and tokenizer...")
         self.model = BartForConditionalGeneration.from_pretrained(model_name)
         self.tokenizer = BartTokenizer.from_pretrained(model_name)
 
         # 4. Initialize metrics evaluator
-        # print("\n=== Metrics Evaluator Setup ===")
-        # print("Initializing MetricsEvaluator...")
         self.metrics_evaluator = MetricsEvaluator()
         self.metrics_evaluator.bart_scorer._wandb = lambda: wandb  # Direct wandb access
         
@@ -48,12 +42,9 @@ class BartFineTuner(pl.LightningModule):
         self.test_csv_file_path = self.model_dir / f"test_details{self.file_label}.csv"
 
         # 5. Store original embeddings
-        # print("\n=== Embedding Configuration ===")
-        # print("Storing original BART scorer embeddings...")
         self.bart_scorer_og_embed = self.metrics_evaluator.bart_scorer.model.get_input_embeddings().weight.clone()
 
         # 6. Gumbel-Softmax setup
-        # print("\n=== Gumbel-Softmax Configuration ===")
         self.use_gumbel = CONFIG["use_gumbel"]
         self.temperature = CONFIG["gumbel_temperature"]
         self.gumbel_hard = CONFIG["gumbel_hard"]
@@ -61,8 +52,6 @@ class BartFineTuner(pl.LightningModule):
         self.min_temp = CONFIG["gumbel_min_temp"]
 
         # 7. Move everything to target device
-        # print("\n=== Device Synchronization ===")
-        # print("Moving all components to target device...")
         self.to(self.target_device)
         self.model = self.model.to(self.target_device)
         self.metrics_evaluator.bart_scorer.model = self.metrics_evaluator.bart_scorer.model.to(self.target_device)
@@ -76,15 +65,6 @@ class BartFineTuner(pl.LightningModule):
         self.epoch_test_details = []
         self.epoch_test_scores = []
         
-        # print("\n[Parameter Status]")
-        # frozen_main = sum(1 for p in self.model.parameters() if not p.requires_grad)
-        # total_main = sum(1 for _ in self.model.parameters())
-        # frozen_scorer = sum(1 for p in self.metrics_evaluator.bart_scorer.model.parameters() if not p.requires_grad)
-        # total_scorer = sum(1 for _ in self.metrics_evaluator.bart_scorer.model.parameters())
-        # print(f"Main model - Frozen: {frozen_main}/{total_main}")
-        # print(f"Scorer model - Frozen: {frozen_scorer}/{total_scorer}")
-       
-        # print("\n=== Initialization Complete ===")
         logger.info("Model initialized successfully")
         
     def train(self, mode=True):
@@ -93,7 +73,6 @@ class BartFineTuner(pl.LightningModule):
         """
         super().train(mode)
         self.metrics_evaluator.bart_scorer.model.eval()
-        # print(">> Setting BART scorer to eval()")
         return self
 
     def forward(self, input_ids, attention_mask, labels=None, **kwargs):
@@ -109,10 +88,6 @@ class BartFineTuner(pl.LightningModule):
         logits = outputs.logits  # [batch, seq_len, vocab_size]
         device = logits.device  # Ensure we use the same device for all tensors
 
-        # ===== 3. Debug Prints =====
-        # print("\n>> Forward Pass")
-        # print(f"Logits: {logits.shape} (device: {device})")
-        # print(f"Range: [{logits.min().item():.2f}, {logits.max().item():.2f}]")
 
         # ===== 4. Gumbel-Softmax =====
         
@@ -122,18 +97,11 @@ class BartFineTuner(pl.LightningModule):
             hard=CONFIG["gumbel_hard"],       
             dim=-1
         )
-        # print(f"Gumbel Probs: μ={probs.mean().item():.4f} σ={probs.std().item():.4f}")
-        # print(f"Sum check (should be ~1.0): {probs.sum(dim=-1).mean().item():.4f}")
-            
+
         
         # ===== 5. Embedding Projection =====
         embedding_matrix = self.metrics_evaluator.bart_scorer.model.get_input_embeddings().weight.to(device)
         expected_embeddings = torch.matmul(probs, embedding_matrix)
-
-        # print("\n>> Output Embeddings")
-        # print(f"Shape: {expected_embeddings.shape}")
-        # print(f"Grad: {'ON' if expected_embeddings.requires_grad else 'OFF'}")
-        # print(f"Stats: μ={expected_embeddings.mean().item():.4f} (Δmax={torch.abs(embedding_matrix - self.bart_scorer_og_embed.to(device)).max().item():.4f})")
 
         return expected_embeddings
 
@@ -155,27 +123,12 @@ class BartFineTuner(pl.LightningModule):
             validation=validation
         )
 
-        # Numerical stability
-        # score_edited = torch.clamp(score_edited, -5.0, 5.0)
-        # score_original = torch.clamp(score_original, -5.0, 5.0)
-        # delta = torch.clamp(score_edited - score_original, -10.0, 10.0)
-        
-        # Reward calculation
-        delta = score_edited - score_original
-        rewards = score_edited + delta
-        # baseline = rewards.mean()
-        #centered_rewards = rewards - baseline
-        final_loss = -rewards.mean()
+
+        final_loss = -score_edited.mean()
+
         return final_loss
 
     def training_step(self, batch, batch_idx):
-        # Initialize metrics
-        #total_grad_norm = 0.0  # Initialize here to ensure it always exists
-        
-        # Training step header
-        # print(f"\n=== Training Step {batch_idx} === [Epoch {self.current_epoch}]")
-        # print(f"Device: {self.device} | Batch Size: {len(batch['input_ids'])}")
-        
         # Forward pass
         input_ids, attention_mask = batch['input_ids'], batch['attention_mask']
         
@@ -193,10 +146,6 @@ class BartFineTuner(pl.LightningModule):
             labels=None
         )
         
-        # Embedding stats
-        # print(f"\n[Embeddings] μ={expected_embeddings.mean().item():.4f} σ={expected_embeddings.std().item():.4f}")
-        # print(f"[Embeddings] Range: [{expected_embeddings.min().item():.4f}, {expected_embeddings.max().item():.4f}]")
-
         # Loss calculation
         dto_loss_val = self.dto_loss_embeds(
             expected_embeddings,
@@ -210,7 +159,6 @@ class BartFineTuner(pl.LightningModule):
 
         # Distribution analysis
         stats = self.analyze_distributions(outputs.logits)
-        # print(f"[Distrib] Entropy: {stats['entropy_mean']:.4f} | Top1: {stats['top1_prob']:.4f}")
 
         # Primary metric logging (explicit for reliability)
         self.log("train/dto_loss", 
@@ -221,24 +169,9 @@ class BartFineTuner(pl.LightningModule):
                 logger=True,
                 batch_size=len(batch['input_ids']))
         
-        # Secondary metrics (grouped for efficiency)
-        self.log_dict({
-            'train/embed_mean': expected_embeddings.mean(),
-            'train/embed_std': expected_embeddings.std(),
-            'train/entropy': stats['entropy_mean'],
-            #'train/grad_norm': torch.tensor(total_grad_norm, device=self.device),
-        }, logger=True)
-        
-        # Gumbel-specific metrics
-        if self.use_gumbel:
-            self.log_dict({
-                'gumbel/temperature': torch.tensor(self.temperature, device=self.device),
-                'gumbel/top1_prob': stats['top1_prob'],
-                'gumbel/top5_prob': stats['top5_prob'],
-            }, logger=True)
 
         # Manual W&B sync every 10 steps (optional backup)
-        if batch_idx % 10 == 0:
+        if batch_idx % 50 == 0:
             wandb.log({
                 "train/dto_loss_debug": dto_loss_val.item(),
                 "step": self.global_step
@@ -254,24 +187,12 @@ class BartFineTuner(pl.LightningModule):
                 attention_mask=batch['attention_mask']
             )
             
-            # print(f"Validation mode - expected_embeddings requires_grad: {expected_embeddings.requires_grad}")
-
-            # Add validation=True flag
-            # dto_loss = self.dto_loss_embeds(
-            #     expected_embeddings, 
-            #     batch['edited_ending'],
-            #     validation=True
-            # )
-
             dto_loss = self.dto_loss_embeds(
                 expected_embeddings,
                 [str(e) for e in batch['edited_ending']],
                 [str(o) for o in batch['original_ending']],
                 validation=True
             )   
-
-            # Debug print 2 - check score gradient status
-            # print(f"Validation mode - dto_loss requires_grad: {dto_loss.requires_grad}")
                    
         # Log metrics
         self.log('val/dto_loss', dto_loss, prog_bar=True)
@@ -284,44 +205,128 @@ class BartFineTuner(pl.LightningModule):
             generated_tokens = self.model.generate(
                 input_ids=batch['input_ids'],
                 attention_mask=batch['attention_mask'],
-                max_length=CONFIG["max_gen_length"]
+                max_length=CONFIG["max_gen_length"],
+                num_beams=CONFIG.get("num_beams", 5),
+                early_stopping=True
             )
-            generated_texts = self.tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
+            generated_texts = self.tokenizer.batch_decode(
+                generated_tokens, 
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=True
+            )
 
-            # 2. Compute text metrics 
-            text_metrics = self.metrics_evaluator.calculate_bart_similarity(
+            # Convert all text inputs to strings
+            edited_endings = [str(e) for e in batch['edited_ending']]
+            counterfactuals = [str(c) for c in batch['counterfactual']]
+            original_endings = [str(o) for o in batch['original_ending']]
+
+            # 2. Compute all text metrics
+            text_metrics = {}
+            
+            # BARTScore metrics
+            bart_metrics = self.metrics_evaluator.calculate_bart_similarity(
                 generated_texts=generated_texts,
-                edited_endings=[str(e) for e in batch['edited_ending']],
-                counterfactuals=[str(c) for c in batch['counterfactual']],
-                initials=[str(i) for i in batch['initial']],
-                original_endings=[str(o) for o in batch['original_ending']]
+                edited_endings=edited_endings,
+                counterfactuals=counterfactuals,
+                original_endings=original_endings
             )
+            text_metrics.update({f'bart/{k}': v for k, v in bart_metrics.items()})
+            
+            # BERTScore metrics (if enabled)
+            if self.metrics_evaluator.bert_scorer is not None:
+                bert_metrics = self.metrics_evaluator.calculate_bert_similarity(
+                    generated_texts=generated_texts,
+                    edited_endings=edited_endings,
+                    counterfactuals=counterfactuals,
+                    original_endings=original_endings
+                )
+                text_metrics.update({f'bert/{k}': v for k, v in bert_metrics.items()})
+            
+            # BLEU metrics (if enabled)
+            if self.metrics_evaluator.sacre_bleu is not None:
+                bleu_metrics = self.metrics_evaluator.calculate_bleu_similarity(
+                    generated_texts=generated_texts,
+                    edited_endings=edited_endings,
+                    counterfactuals=counterfactuals,
+                    original_endings=original_endings
+                )
+                text_metrics.update({f'bleu/{k}': v for k, v in bleu_metrics.items()})
+            
+            # ROUGE metrics
+            rouge_metrics = self.metrics_evaluator.calculate_rouge_similarity(
+                generated_texts=generated_texts,
+                edited_endings=edited_endings,
+                counterfactuals=counterfactuals,
+                original_endings=original_endings
+            )
+            text_metrics.update({f'rouge/{k}': v for k, v in rouge_metrics.items()})
 
-            # 3. Log only the metrics you care about
+            # 3. Calculate delta metrics for all metric types
+            delta_metrics = {}
+            
+            # BARTScore Delta
+            if all(k in bart_metrics for k in ['pred_edited_score', 'pred_original_score']):
+                delta_metrics['bart_delta'] = (
+                    2 * bart_metrics['pred_edited_score'] - 
+                    bart_metrics['pred_original_score']
+                )
+            
+            # BERTScore Delta (F1)
+            if self.metrics_evaluator.bert_scorer is not None:
+                if all(k in bert_metrics for k in ['prediction_edited_f1', 'prediction_original_f1']):
+                    delta_metrics['bert_delta'] = (
+                        2 * bert_metrics['prediction_edited_f1'] - 
+                        bert_metrics['prediction_original_f1']
+                    )
+            
+            # BLEU Delta
+            if self.metrics_evaluator.sacre_bleu is not None:
+                if all(k in bleu_metrics for k in ['prediction_edited', 'prediction_original']):
+                    delta_metrics['bleu_delta'] = (
+                        2 * bleu_metrics['prediction_edited'] - 
+                        bleu_metrics['prediction_original']
+                    )
+            
+            # ROUGE Delta (using ROUGE-L F1)
+            if 'prediction_edited_rouge-l_f' in rouge_metrics and 'prediction_original_rouge-l_f' in rouge_metrics:
+                delta_metrics['rouge_delta'] = (
+                    2 * rouge_metrics['prediction_edited_rouge-l_f'] - 
+                    rouge_metrics['prediction_original_rouge-l_f']
+                )
+
+            # Add all delta metrics to the main metrics dictionary
+            text_metrics.update({f'delta/{k}': v for k, v in delta_metrics.items()})
+
+            # 4. Log all metrics
             self.log_dict(
                 {f'test/{k}': v for k, v in text_metrics.items()},
-                prog_bar=True
+                prog_bar=True,
+                logger=True,
+                batch_size=len(batch['input_ids']),
+                sync_dist=True
             )
 
-            # 4. Store minimal test details if needed
+            # 5. Store test details for epoch-end processing
             self.epoch_test_details.extend({
                 'generated': gen,
                 'edited': edit,
                 'counterfactual': cf,
-                'original': orig
-            } for gen, edit, cf, orig in zip(
+                'original': orig,
+                'input_ids': ids.tolist() if torch.is_tensor(ids) else ids
+            } for gen, edit, cf, orig, ids in zip(
                 generated_texts,
-                batch['edited_ending'],
-                batch['counterfactual'],
-                batch['original_ending']
+                edited_endings,
+                counterfactuals,
+                original_endings,
+                batch['input_ids']
             ))
+        
         return None
 
     def on_validation_epoch_end(self):
         """
         Finalize and save validation results at the end of the validation epoch.
         """
-        print(">>Validation Epoch End")
         if self.epoch_validation_details:
             self.log_to_csv(self.val_csv_file_path, self.epoch_validation_details, epoch=self.current_epoch)
         if self.epoch_scores:
@@ -331,13 +336,66 @@ class BartFineTuner(pl.LightningModule):
         self.epoch_scores.clear()
 
     def on_test_epoch_end(self):
-        if self.epoch_test_details:
-            self.log_to_csv(self.test_csv_file_path, self.epoch_test_details, epoch=self.current_epoch)
-        if self.epoch_test_scores:
-            overall_test_score = torch.tensor(self.epoch_test_scores).mean().item()
-            self.log("test_overall_score", overall_test_score, prog_bar=True, logger=True)
+        """Save complete metrics including deltas to CSV"""
+        if not hasattr(self, 'epoch_test_details') or not self.epoch_test_details:
+            return
+
+        # 1. Keep original text logging
+        self.log_to_csv(self.test_csv_file_path, self.epoch_test_details, epoch=self.current_epoch)
+
+        # 2. Calculate ALL metrics (like in test_step)
+        all_texts = [d['generated'] for d in self.epoch_test_details]
+        all_edited = [d['edited'] for d in self.epoch_test_details]
+        all_cf = [d['counterfactual'] for d in self.epoch_test_details]
+        all_original = [d['original'] for d in self.epoch_test_details]
+
+        # Initialize metrics dictionary
+        all_metrics = {}
+
+        # Calculate all metric types
+        bart_metrics = self.metrics_evaluator.calculate_bart_similarity(all_texts, all_edited, all_cf, all_original)
+        all_metrics.update({f'bart/{k}': v for k, v in bart_metrics.items()})
+
+        if self.metrics_evaluator.bert_scorer is not None:
+            bert_metrics = self.metrics_evaluator.calculate_bert_similarity(all_texts, all_edited, all_cf, all_original)
+            all_metrics.update({f'bert/{k}': v for k, v in bert_metrics.items()})
+
+        if self.metrics_evaluator.sacre_bleu is not None:
+            bleu_metrics = self.metrics_evaluator.calculate_bleu_similarity(all_texts, all_edited, all_cf, all_original)
+            all_metrics.update({f'bleu/{k}': v for k, v in bleu_metrics.items()})
+
+        rouge_metrics = self.metrics_evaluator.calculate_rouge_similarity(all_texts, all_edited, all_cf, all_original)
+        all_metrics.update({f'rouge/{k}': v for k, v in rouge_metrics.items()})
+
+        # Calculate deltas (same logic as test_step)
+        deltas = {}
+        if all(k in bart_metrics for k in ['pred_edited_score', 'pred_original_score']):
+            deltas['bart_delta'] = 2*bart_metrics['pred_edited_score'] - bart_metrics['pred_original_score']
+        
+        if (self.metrics_evaluator.bert_scorer and 
+            all(k in bert_metrics for k in ['prediction_edited_f1', 'prediction_original_f1'])):
+            deltas['bert_delta'] = 2*bert_metrics['prediction_edited_f1'] - bert_metrics['prediction_original_f1']
+        
+        if (self.metrics_evaluator.sacre_bleu and 
+            all(k in bleu_metrics for k in ['prediction_edited', 'prediction_original'])):
+            deltas['bleu_delta'] = 2*bleu_metrics['prediction_edited'] - bleu_metrics['prediction_original']
+        
+        if all(k in rouge_metrics for k in ['prediction_edited_rouge-l_f', 'prediction_original_rouge-l_f']):
+            deltas['rouge_delta'] = 2*rouge_metrics['prediction_edited_rouge-l_f'] - rouge_metrics['prediction_original_rouge-l_f']
+        
+        all_metrics.update({f'delta/{k}': v for k, v in deltas.items()})
+
+        # 3. Save complete metrics to CSV
+        metrics_csv_path = self.model_dir / f"test_metrics_epoch_{self.current_epoch}.csv"
+        pd.DataFrame([
+            {'Metric': k, 'Score': v} 
+            for k, v in all_metrics.items()
+        ]).to_csv(metrics_csv_path, index=False)
+
+        # 4. Cleanup
         self.epoch_test_details.clear()
-        self.epoch_test_scores.clear()
+        if hasattr(self, 'epoch_test_scores'):
+            self.epoch_test_scores.clear()
 
     def log_to_csv(self, csv_file_path, details, epoch=None):
         file_exists = os.path.isfile(csv_file_path)
@@ -382,8 +440,8 @@ class BartFineTuner(pl.LightningModule):
         top5_prob = probs.topk(5).values.sum(dim=-1).mean()
         
         # Additional useful metrics
-        max_prob = probs.max(dim=-1).values.mean()  # Average max probability
-        min_prob = probs.min(dim=-1).values.mean()  # Average min probability
+        max_prob = probs.max(dim=-1).values.mean()  
+        min_prob = probs.min(dim=-1).values.mean()  
         
         return {
             'entropy_mean': entropy.mean(),

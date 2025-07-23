@@ -1,4 +1,3 @@
-# /data/agirard/Projects/TimeTravel-DifferentiableMetrics/src/dto/utils/config.py
 import os
 from pathlib import Path
 
@@ -14,13 +13,10 @@ CONFIG = {
     "results_dir": ROOT_DIR / "results",             # Evaluation results (e.g., validation details)
 
     # **Dataset Type**
-    "dataset_type": "AblatedTimeTravel",   # Options: "ART", "TimeTravel", "AblatedTimeTravel"
-
-    # Art dataset
-    # "train_file": "art_train_data.json",
-    # "dev_file": "art_dev_data.json",
-    # "test_file": "art_test_data.json", 
-
+    "dataset_type": "TimeTravel",   # Options: "ART", "TimeTravel", "AblatedTimeTravel"
+    
+    "beta": 0.5, # inverse temperature β for contrastive sigmoid
+    "lamda": 2.0,
 
     # **Dataset Files**
     "train_file": "train_supervised_small.json",
@@ -31,22 +27,16 @@ CONFIG = {
     "model_name": os.getenv('MODEL_NAME', "facebook/bart-large-cnn"),  # Base model
     "batch_size": int(os.getenv('BATCH_SIZE', 2)),   # Training batch size
     "num_workers": int(os.getenv('NUM_WORKERS', 3)), # Dataloader workers
-    "learning_rate": float(os.getenv('LEARNING_RATE', 1e-8)),  # Reduced from 5e-9, 1e-8 for more stable training
+    "learning_rate": float(os.getenv('LEARNING_RATE', 1e-5)),  
 
     # **Training Parameters**
     "max_length": 512,      # Max token length for input sequences
     "max_gen_length": 250,  # Max token length for generated text
     "shuffle": True,        # Shuffle dataset during training
-    "dto_epochs": 10,  # Number of DTO training epochs
+    "cpo_epochs": 3,  # Number of CPO training epochs
 
-    # **MLE Checkpoint for DTO Training - TT **
-    #"dto_checkpoint_path":"/data/user/Projects/TimeTravel-DifferentiableMetrics/models/mle_2025-03-31-19/mle_checkpoint_epoch-epoch=00-step-step=004180-val_loss-validation_mle_loss=0.91.ckpt", #MLE6
-    
-    # **MLE Checkpoint for DTO Training - ART**
-    #"dto_checkpoint_path":"/data/user/Projects/TimeTravel-DifferentiableMetrics/models/mle_2025-07-15-11/mle_checkpoint_epoch-epoch=00-step-step=002524-val_loss-validation_mle_loss=2.42.ckpt", #ART2
-
-    # **TT - Ablated**
-    "dto_checkpoint_path":"/data/user/Projects/TimeTravel-DifferentiableMetrics/models/mle_2025-07-17-10/mle_checkpoint_epoch-epoch=00-step-step=002090-val_loss-validation_mle_loss=2.31.ckpt", #TT-ablated-6
+    # **MLE Checkpoint for CPO Training**
+    "cpo_checkpoint_path":"/data/user/Projects/TimeTravel-DifferentiableMetrics/models/mle_2025-03-31-19/mle_checkpoint_epoch-epoch=00-step-step=004180-val_loss-validation_mle_loss=0.91.ckpt", #MLE6
 
 
     # **Evaluation Metrics (BARTScore)**
@@ -57,16 +47,16 @@ CONFIG = {
     # **Additional Training Options**
     "output_attentions": True,  # Enable model attention output (optional)
 
-    # **Gumbel-Softmax Settings**
-    "use_gumbel": True,                      # Enable/disable Gumbel-Softmax
-    "gumbel_temperature": 1,   # Fixed temperature (higher than 1.0 for better gradients) 1, 1.5
-    "gumbel_hard": False, 
+    # # **Gumbel-Softmax Settings**
+    # "use_gumbel": True,                      # Enable/disable Gumbel-Softmax
+    # "gumbel_temperature": 1,   # Fixed temperature (higher than 1.0 for better gradients) 1, 1.5
+    # "gumbel_hard": False, 
 
-    # Annealing Settings (Disabled for initial experiments)
-    "gumbel_annealing": False,   # Disable automatic temperature annealing
-    "gumbel_anneal_rate": 0.999, # Default rate (unused when annealing=False)
-    "gumbel_min_temp": 0.1,      # Default minimum (unused when annealing=False)
-    "gumbel_log_freq": 100,       # Log frequency if enabled later
+    # # Annealing Settings (Disabled for initial experiments)
+    # "gumbel_annealing": False,   # Disable automatic temperature annealing
+    # "gumbel_anneal_rate": 0.999, # Default rate (unused when annealing=False)
+    # "gumbel_min_temp": 0.1,      # Default minimum (unused when annealing=False)
+    # "gumbel_log_freq": 100,       # Log frequency if enabled later
 
     # **New Optimization Parameters**
     # "gradient_clip_val": 0.5,

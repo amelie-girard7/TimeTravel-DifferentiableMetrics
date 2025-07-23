@@ -1,4 +1,3 @@
-#/data/agirard/Projects/TimeTravel-DifferentiableMetrics/src/mle/utils/config.py
 import os
 from pathlib import Path
 
@@ -16,30 +15,30 @@ CONFIG = {
     "dataset_type": "TimeTravel",  # Options: "ART", "TimeTravel", "AblatedTimeTravel"
 
     # ******** Data files ***********
+    #"train_file": "train_supervised_small_sample.json",
+    #"dev_file": "dev_data_sample.json",
+    #"test_file": "test_data_sample.json",
+    
+    # Timetravel,AblatedTimeTravel datasets
     "train_file": "train_supervised_small.json",
     "dev_file": "dev_data.json",
     "test_file": "test_data.json",
-    
-    # Timetravel,AblatedTimeTravel datasets
-    #"train_file": "train_supervised_small.json",
-    #"dev_file": "dev_data.json",
-    #"test_file": "test_data.json",
 
     # Sample Art dataset
-    #"train_file": "art_train_data_sample.json",
-    #"dev_file": "art_dev_data_sample.json",
-    #"test_file": "art_test_data_sample.json", 
+    # "train_file": "art_train_data_sample.json",
+    # "dev_file": "art_dev_data_sample.json",
+    # "test_file": "art_test_data_sample.json", 
     # 
     # Art dataset
-    #"train_file": "art_train_data.json",
-    #"dev_file": "art_dev_data.json",
-    #"test_file": "art_test_data.json", 
+    # "train_file": "art_train_data.json",
+    # "dev_file": "art_dev_data.json",
+    # "test_file": "art_test_data.json", 
 
     # Model and training configurations
     "model_name": os.getenv('MODEL_NAME', "facebook/bart-large-cnn"),  # Use BART model instead of T5
     "batch_size": int(os.getenv('BATCH_SIZE', 4)),  # Number of samples per batch
     "num_workers": int(os.getenv('NUM_WORKERS', 3)),  # Number of workers for data loading
-    "learning_rate": float(os.getenv('LEARNING_RATE', 1e-5)),  # Learning rate for the optimizer
+    "learning_rate": float(os.getenv('LEARNING_RATE', 5e-5)),  # Learning rate for the optimizer
 
     # Preprocessing and generation parameters
     "max_length": 512,  # Maximum length for input data
@@ -52,8 +51,6 @@ CONFIG = {
 
     "mle_from_checkpoint": False,  # Resume MLE training from checkpoint
     "mle_checkpoint_path": None, # Train MLE from scratch
-    #"mle_checkpoint_path": "/data/agirard/Projects/TimeTravel-DifferentiableMetrics/models/mle_2025-03-31-09/mle_checkpoint_epoch-epoch=00-step-step=004180-val_loss-validation_mle_loss=0.92.ckpt", #MLE1
-    #"mle_checkpoint_path": "/data/agirard/Projects/TimeTravel-DifferentiableMetrics/models/mle_2025-03-31-14/mle_checkpoint_epoch-epoch=00-step-step=000418-val_loss-validation_mle_loss=0.95.ckpt", #MLE2   
     "mle_epochs": 6,  # Number of epochs for MLE training
 
     # **Metric Configuration (Only BART is used)**
@@ -63,6 +60,33 @@ CONFIG = {
     # Additional training options
     "use_custom_loss": False,  # Whether to use a custom loss function (set to False for MLE)
     "output_attentions": False,  # Set to True to output attentions from the model (optional)
+
+    # GPT Inference and evaluation settings
+    # "inference_mode": "one_shot",  # Options: zero_shot, one_shot
+    # "example_selection": "random",  # "fixed" or "random" - Example selection for one_shot mode
+    #"run_similarities_only": True,  # If True, only run similarities, # False, Generate new results
+
+    # **Evaluation Metrics (BARTScore)**
+    "reward_metric": "bart",                      # Primary evaluation metric
+    "use_bart": True,                             # Use BART as the reward model
+    "bart_scorer_checkpoint": "facebook/bart-large-cnn",  # BART model for evaluation
+
+        # Additional configuration for scoring metrics 
+    "use_bert": True,  # Disable BERT scorer
+    "bert_scorer_model_type": "microsoft/deberta-xlarge-mnli",  # Default BERT model for scorer 
+    "scorer_device": "cuda:0",  # Device for the scorer
+    "bert_scorer_batch_size": 4,  # Batch size for BERT scorer 
+
+    "use_bleu": True,  # Disable BLEU scorer,
+    
+    # RAG
+    "run_similarities_only": False,  # # False = generate+metrics, True = metrics only
+    "inference_mode": "rag",  # Options: "standard" (GPT), "rag"
+    "rag": {
+        "persist_path": str(ROOT_DIR / "vector_store"),
+        "k": 1,  # Number of retrieved examples
+        "embedding_model": "text-embedding-3-small"
+    }
 }
 
 # Create any directories that don't exist
@@ -70,4 +94,6 @@ for path_key in ["data_dir", "models_dir", "logs_dir", "results_dir"]:
     path = CONFIG[path_key]
     if not path.exists():
         print(f"Creating directory: {path}")
+
+
        

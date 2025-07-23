@@ -6,7 +6,7 @@ import pandas as pd
 import torch
 import torch.nn.utils.rnn
 import uuid  # Add this import statement
-from src.dto.utils.config import CONFIG
+from src.cpo.utils.config import CONFIG
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,8 @@ def load_first_line_from_json(file_path):
     except Exception as e:
         logger.error(f"Error reading from {file_path}: {e}")
         raise IOError(f"Error reading from {file_path}: {e}")
+
+
 
 
 def preprocess_data(row, tokenizer):
@@ -86,7 +88,6 @@ def preprocess_data(row, tokenizer):
             row['edited_ending'], truncation=True, return_tensors="pt", max_length=CONFIG["max_length"]
         )
 
-
         # Prepare the final output dictionary
         return {
             'input_ids': tokenized_inputs['input_ids'].squeeze(0),
@@ -111,28 +112,24 @@ def collate_fn(batch, pad_token_id=0, attention_pad_value=0):
     Collates a batch of preprocessed data into a format suitable for model input,
     including padding to equalize the lengths of sequences within the batch.
     """
+    print(f"Batch before collation: {batch}")  # Debug print to show the raw batch data
+    # Unpack the batch into separate lists for each field.
+    # Extract fields explicitly to prevent ordering issues
     input_ids = [item['input_ids'] for item in batch]
     attention_mask = [item['attention_mask'] for item in batch]
     labels = [item['labels'] for item in batch]
     premise = [item['premise'] for item in batch]
     initial = [item['initial'] for item in batch]
+    original_ending = [item['original_ending'] for item in batch]
     counterfactual = [item['counterfactual'] for item in batch]
     edited_ending = [item['edited_ending'] for item in batch]
-
-
-    # Handle original_ending - use empty string if not present
-    original_ending = []
-    for item in batch:
-        if 'original_ending' in item:
-            original_ending.append(item['original_ending'])
-        else:
-            original_ending.append("")  # Default empty string
 
     # Padding sequences for 'input_ids', 'attention_masks', and 'labels'
     input_ids_padded = torch.nn.utils.rnn.pad_sequence(input_ids, batch_first=True, padding_value=pad_token_id)
     attention_masks_padded = torch.nn.utils.rnn.pad_sequence(attention_mask, batch_first=True,
                                                              padding_value=attention_pad_value)
     labels_padded = torch.nn.utils.rnn.pad_sequence(labels, batch_first=True, padding_value=pad_token_id)
+
     # Return the padded tensors along with the additional fields for evaluation.
     return {
         'input_ids': input_ids_padded,
@@ -144,3 +141,5 @@ def collate_fn(batch, pad_token_id=0, attention_pad_value=0):
         'counterfactual': counterfactual,
         'edited_ending': edited_ending,
     }
+
+

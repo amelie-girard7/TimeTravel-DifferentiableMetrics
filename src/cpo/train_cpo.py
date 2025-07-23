@@ -16,10 +16,10 @@ from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
 
 # Local imports
-from src.dto.models.model import BartFineTuner
-from src.dto.data_loader import create_dataloaders
-from src.dto.utils.metrics import MetricsEvaluator
-from src.dto.utils.config import CONFIG
+from src.cpo.models.model import BartFineTuner
+from src.cpo.data_loader import create_dataloaders
+from src.cpo.utils.metrics import MetricsEvaluator
+from src.cpo.utils.config import CONFIG
 
 
 # Add project root to Python path
@@ -153,7 +153,7 @@ def setup_model(model_dir, file_label="", checkpoint_path=None):
         model = BartFineTuner(
             model_name=CONFIG["model_name"],
             model_dir=model_dir,
-            file_label=file_label or "_dto"
+            file_label=file_label or "_cpo"
         )
         
         # Load with strict=False to handle architecture changes
@@ -167,8 +167,8 @@ def setup_model(model_dir, file_label="", checkpoint_path=None):
         # Verify critical weights match
         if "model.lm_head.weight" in checkpoint["state_dict"]:
             mle_head = checkpoint["state_dict"]["model.lm_head.weight"].cpu()
-            dto_head = model.model.lm_head.weight.detach().cpu()
-            head_match = torch.allclose(dto_head, mle_head, atol=1e-6)
+            cpo_head = model.model.lm_head.weight.detach().cpu()
+            head_match = torch.allclose(cpo_head, mle_head, atol=1e-6)
             logger.info(f"LM head weights match: {head_match}")
             if not head_match:
                 logger.warning("LM head weights mismatch detected")
@@ -193,15 +193,15 @@ def setup_trainer(max_epochs, model_dir):
         callbacks = [
             ModelCheckpoint(
                 dirpath=model_dir,
-                monitor='val/dto_loss',
+                monitor='val/cpo_loss',
                 mode='min',
                 save_top_k=1,  # Keep top 3 checkpoints instead of just 1
-                filename='dto-best-{epoch}-{val/dto_loss:.2f}', 
+                filename='cpo-best-{epoch}-{val/cpo_loss:.2f}', 
                 auto_insert_metric_name=False,
                 #save_last=True
             ),
             EarlyStopping(
-                monitor='val/dto_loss',
+                monitor='val/cpo_loss',
                 min_delta=0.00, 
                 patience=30, 
                 mode='min',
@@ -238,7 +238,7 @@ def main():
         
         # Setup directories and logging
         timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        model_dir = Path(CONFIG["models_dir"]) / f"dto_{timestamp}"
+        model_dir = Path(CONFIG["models_dir"]) / f"cpo_{timestamp}"
         model_dir.mkdir(parents=True, exist_ok=True)
         
     
@@ -274,11 +274,11 @@ def main():
         # Model and trainer setup
         model = setup_model(
             model_dir,
-            checkpoint_path=CONFIG["dto_checkpoint_path"]
+            checkpoint_path=CONFIG["cpo_checkpoint_path"]
         )
         
         trainer, checkpoint_callback = setup_trainer(
-            CONFIG["dto_epochs"],
+            CONFIG["cpo_epochs"],
             model_dir
         )
 
@@ -303,7 +303,7 @@ def main():
             best_path,
             model_name=CONFIG["model_name"],
             model_dir=model_dir,
-            file_label="_dto"
+            file_label="_cpo"
         )
 
         # Final validation

@@ -12,20 +12,37 @@ def process_data(df):
     Extracts necessary columns, computes similarity metrics using MetricsEvaluator,
     and returns a DataFrame of metrics.
     """
-    generated_texts = df['Generated Text'].tolist()
-    edited_endings = df['Edited Ending'].tolist()
-    counterfactuals = df['Counterfactual'].tolist()
-    initials = df['Initial'].tolist()
-    premises = df['Premise'].tolist()
-    original_endings = df['Original Ending'].tolist()
+    # Verify the expected columns exist
+    required_columns = ['generated', 'edited', 'counterfactual', 'original']
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    
+    if missing_columns:
+        raise ValueError(f"CSV file is missing required columns: {missing_columns}. Found columns: {df.columns.tolist()}")
+
+    # Extract columns
+    generated_texts = df['generated'].astype(str).tolist()
+    edited_endings = df['edited'].astype(str).tolist()
+    counterfactuals = df['counterfactual'].astype(str).tolist()
+    original_endings = df['original'].astype(str).tolist()
 
     evaluator = MetricsEvaluator()
     all_metrics = {}
 
-    # Calculate all similarity metrics (BART, BERT, BLEU, ROUGE)
-    all_metrics.update(evaluator.calculate_and_log_bart_similarity(
-        generated_texts, edited_endings, counterfactuals, initials, premises, original_endings, logger
-    ))
+    # Calculate BART similarity metrics
+    comparisons = [
+        ('bart/pred_edited', generated_texts, edited_endings),
+        ('bart/pred_cf', generated_texts, counterfactuals),
+        ('bart/pred_original', generated_texts, original_endings),
+        ('bart/edited_cf', edited_endings, counterfactuals),
+        ('bart/edited_original', edited_endings, original_endings),
+    ]
+    
+    for label, src, tgt in comparisons:
+        try:
+            scores = evaluator.bart_scorer.score(src, tgt, batch_size=4)
+            all_metrics[f"{label}_score"] = sum(scores) / len(scores)
+        except Exception as e:
+            all_metrics[f"{label}_score"] = float('nan')
 
     metrics_df = pd.DataFrame.from_dict(all_metrics, orient='index', columns=['Score'])
     metrics_df.reset_index(inplace=True)
@@ -47,7 +64,6 @@ def process_file(file_path):
         base_name, ext = os.path.splitext(os.path.basename(file_path))
         output_file_path = os.path.join(base_dir, f'{base_name}_metrics{ext}')
         metrics_df.to_csv(output_file_path, index=False)
-        print(f"Metrics saved to {output_file_path}")
     else:
         print(f"File not found: {file_path}")
 
@@ -66,7 +82,6 @@ def process_repository(repo_path, prefix):
             return
         for csv_file in csv_files:
             file_path = os.path.join(repo_path, csv_file)
-            print(f"Processing file: {file_path}")
             process_file(file_path)
     else:
         print(f"Repository not found: {repo_path}")
@@ -81,7 +96,7 @@ def main():
     """
     # List of repository directories to process.
     repo_paths = [
-        '/data/agirard/Projects/TimeTravel-DifferentiableMetrics/models/dto_2025-05-12-16',  # 
+        '/data/user/Projects/TimeTravel-DifferentiableMetrics/models/dto_2025-05-29_15-58-59',
     ]
 
     # # Process validation files

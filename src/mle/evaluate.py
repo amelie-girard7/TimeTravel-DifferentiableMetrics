@@ -1,4 +1,3 @@
-# /data/agirard/Projects/TimeTravel-DifferentiableMetrics/src/mle/evaluate.py
 import sys
 import os
 import logging
@@ -73,14 +72,13 @@ def main(checkpoint_path):
     test_details_df.to_csv(test_details_file, index=False)
     logger.info(f"Test details saved to: {test_details_file}")
 
-    # Print instructions for running metric calculation
     logger.info("\nEvaluation complete. To calculate metrics, run:")
     logger.info(f"python calculate_metrics.py --files {val_details_file} {test_details_file}")
 
 
 if __name__ == '__main__':
     if len(sys.argv) != 2:
-        print("Usage: python evaluate.py <path_to_checkpoint>")
+        logger.info("Usage: python evaluate.py <path_to_checkpoint>")
         sys.exit(1)
 
     checkpoint_path = sys.argv[1]
