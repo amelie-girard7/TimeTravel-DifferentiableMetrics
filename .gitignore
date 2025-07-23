@@ -177,3 +177,5 @@ src/dto/wandb/
 
 src/dto/lightning_logs/
 
+src/BARTScore_metric/WMT/de-en/final_p.pkl
+src/BARTScore_metric/SUM/REALSumm/final_p.pkl
